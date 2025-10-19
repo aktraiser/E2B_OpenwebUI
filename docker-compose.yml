@@ -4,7 +4,7 @@ services:
   csv-analyzer:
     build: .
     ports:
-      - "8090:8000"
+      - "8091:8000"
     environment:
       - E2B_API_KEY=${E2B_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}

@@ -62,7 +62,7 @@ analysis_request: "Analyse les tendances de vente par mois" (optionnel)
 ### Exemple d'usage
 
 ```bash
-curl -X POST http://localhost:8090/analyze \
+curl -X POST http://localhost:8091/analyze \
   -F "csv_file=@your_data.csv" \
   -F "analysis_request=Analyser les tendances temporelles et créer des graphiques"
 ```
@@ -114,7 +114,7 @@ server {
     server_name your-domain.com;
     
     location / {
-        proxy_pass http://localhost:8090;
+        proxy_pass http://localhost:8091;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -137,7 +137,7 @@ def analyze_csv(csv_file_path, analysis_request="Analyze this dataset"):
         data = {'analysis_request': analysis_request}
         
         response = requests.post(
-            'http://your-vps:8090/analyze',
+            'http://your-vps:8091/analyze',
             files=files,
             data=data
         )
