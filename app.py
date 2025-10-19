@@ -261,6 +261,35 @@ def analyze_csv_with_guaranteed_results(csv_path_in_sandbox, analysis_request):
     finally:
         sbx.kill()
 
+@app.route('/', methods=['GET'])
+def index():
+    return jsonify({
+        "service": "CSV Analyzer avec E2B",
+        "version": "1.0.0",
+        "status": "operational",
+        "description": "Service d'analyse de fichiers CSV avec génération automatique de graphiques interactifs",
+        "endpoints": {
+            "health": "/health",
+            "analyze": "/analyze (POST)"
+        },
+        "usage": {
+            "method": "POST",
+            "url": "/analyze",
+            "parameters": {
+                "csv_file": "Fichier CSV à analyser",
+                "analysis_request": "Description de l'analyse souhaitée (optionnel)"
+            }
+        },
+        "features": [
+            "Analyse automatique de structure CSV",
+            "Génération de graphiques interactifs",
+            "Insights business automatiques",
+            "Corrélations et tendances",
+            "Compatible OpenWebUI"
+        ],
+        "powered_by": ["E2B Code Interpreter", "Flask", "Pandas", "Matplotlib"]
+    })
+
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({"status": "healthy"})
