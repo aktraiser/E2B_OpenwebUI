@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  csv-analyzer:
+    build: .
+    ports:
+      - "8080:8000"
+    environment:
+      - E2B_API_KEY=${E2B_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - PORT=8000
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    volumes:
+      - /tmp:/tmp:rw
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
