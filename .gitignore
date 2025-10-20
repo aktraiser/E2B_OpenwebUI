@@ -44,4 +44,4 @@ Thumbs.db
 # Test files
 test_data.csv
 sales_data.csv
-*.tmp
+*.tmptest_env/

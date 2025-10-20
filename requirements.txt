@@ -1,4 +1,5 @@
 fastmcp
+mcpo
 python-dotenv==1.0.0
 e2b-code-interpreter
 pandas

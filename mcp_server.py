@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 MCP Server pour CSV Analyzer avec E2B
-Serveur MCP natif pour OpenWebUI
+Serveur MCP natif pour exposition via mcpo
 """
 
 import asyncio
@@ -386,23 +386,23 @@ def analyze_csv_from_content(csv_content: str, analysis_request: str = "Analyze 
 @mcp.resource("service://info")
 def get_service_info() -> str:
     """Informations sur le service CSV Analyzer"""
-    return '''{
+    return '''{{
         "service": "CSV Analyzer avec E2B",
-        "version": "2.0.0-MCP",
+        "version": "2.0.0-MCPO",
         "description": "Serveur MCP pour l'analyse de fichiers CSV avec E2B Code Interpreter",
         "capabilities": [
             "Analyse automatique de structure CSV",
             "Génération de graphiques interactifs",
             "Insights business automatiques",
             "Corrélations et tendances",
-            "Compatible OpenWebUI via MCP"
+            "Compatible OpenWebUI via MCPO"
         ],
         "tools": [
             "analyze_csv_from_url",
             "analyze_csv_from_content"
         ],
-        "powered_by": ["E2B Code Interpreter", "MCP", "Python"]
-    }'''
+        "powered_by": ["E2B Code Interpreter", "MCP", "MCPO", "Python"]
+    }}'''
 
 # Prompt MCP: Template d'analyse
 @mcp.prompt()

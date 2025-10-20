@@ -1,14 +1,18 @@
-# CSV Analyzer avec E2B - Service pour OpenWebUI
+# CSV Analyzer MCPO - OpenWebUI Integration
 
-Service dockerisé qui analyse des fichiers CSV avec l'IA et génère des charts interactifs en utilisant E2B Code Interpreter.
+Service d'analyse de fichiers CSV avec E2B Code Interpreter utilisant MCPO (MCP-to-OpenAPI proxy) pour intégration OpenWebUI.
 
-## 🚀 Fonctionnalités
+## 🚀 Architecture
 
-- **Upload de CSV** : API REST pour recevoir des fichiers CSV
-- **Analyse IA** : Utilise Claude 3.5 Sonnet pour analyser automatiquement les données
-- **Charts interactifs** : Génère des visualisations interactives avec E2B
-- **Déploiement facile** : Containerisé avec Docker pour VPS
-- **Compatible OpenWebUI** : API REST prête pour intégration
+- **Serveur MCP natif** avec FastMCP
+- **MCPO Proxy** qui expose le MCP server via OpenAPI REST
+- **E2B Code Interpreter** pour exécution sécurisée  
+- **Déploiement VPS** sur port 8091
+- **Intégration OpenWebUI** via External Tools
+
+```
+OpenWebUI → http://147.93.94.85:8091 → MCPO → MCP Server → E2B
+```
 
 ## 📋 Prérequis
 

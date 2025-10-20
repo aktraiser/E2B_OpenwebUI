@@ -1,16 +1,17 @@
 #!/bin/bash
 
-# Script de déploiement MCP Server CSV Analyzer sur VPS
-# Usage: ./deploy-mcp-server.sh
+# Script de déploiement MCPO CSV Analyzer sur VPS
+# Usage: ./deploy-mcpo.sh
 
 set -e
 
-echo "🚀 Déploiement du serveur MCP CSV Analyzer"
+echo "🚀 Déploiement du serveur MCPO CSV Analyzer"
 
 # Variables
-APP_DIR="/opt/csv-analyzer-mcp"
-SERVICE_NAME="csv-analyzer-mcp"
-USER_NAME="mcp"
+APP_DIR="/opt/csv-analyzer-mcpo"
+SERVICE_NAME="csv-analyzer-mcpo"
+USER_NAME="mcpo"
+PORT=8091
 
 # 1. Créer l'utilisateur système
 echo "👤 Création de l'utilisateur système..."
@@ -49,11 +50,33 @@ sudo -u $USER_NAME $APP_DIR/venv/bin/pip install -r $APP_DIR/requirements.txt
 # 7. Configurer les permissions
 echo "🔐 Configuration des permissions..."
 sudo chown -R $USER_NAME:$USER_NAME $APP_DIR
-sudo chmod +x $APP_DIR/mcp_server.py
 
-# 8. Installer le service systemd
-echo "⚙️  Installation du service systemd..."
-sudo cp csv-analyzer-mcp.service /etc/systemd/system/
+# 8. Créer le service systemd pour MCPO
+echo "⚙️  Création du service systemd MCPO..."
+sudo tee /etc/systemd/system/$SERVICE_NAME.service > /dev/null <<EOF
+[Unit]
+Description=CSV Analyzer MCPO Server
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=$USER_NAME
+Group=$USER_NAME
+WorkingDirectory=$APP_DIR
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=$APP_DIR/.env
+ExecStart=$APP_DIR/venv/bin/mcpo --host 0.0.0.0 --port $PORT --api-key "csv-analyzer-api-key" -- $APP_DIR/venv/bin/python $APP_DIR/mcp_server.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=$SERVICE_NAME
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 sudo systemctl daemon-reload
 sudo systemctl enable $SERVICE_NAME
 
@@ -62,18 +85,17 @@ echo "🔧 Configuration des variables d'environnement..."
 if [ ! -f "$APP_DIR/.env" ]; then
     sudo -u $USER_NAME tee $APP_DIR/.env > /dev/null <<EOF
 E2B_API_KEY=your_e2b_api_key_here
-# Ajoutez d'autres variables d'environnement si nécessaire
 EOF
     echo "⚠️  Fichier .env créé. Modifiez $APP_DIR/.env avec vos vraies clés API"
 fi
 
 # 10. Démarrer le service
-echo "🚀 Démarrage du service..."
+echo "🚀 Démarrage du service MCPO..."
 sudo systemctl start $SERVICE_NAME
 
 # 11. Vérifier le statut
 echo "📊 Vérification du statut..."
-sleep 2
+sleep 10
 if sudo systemctl is-active --quiet $SERVICE_NAME; then
     echo "✅ Service $SERVICE_NAME démarré avec succès"
     sudo systemctl status $SERVICE_NAME --no-pager -l
@@ -86,32 +108,24 @@ else
 fi
 
 echo ""
-echo "🎉 Déploiement terminé !"
+echo "🎉 Déploiement MCPO terminé !"
 echo ""
 echo "📍 Informations importantes:"
-echo "  - Répertoire d'application: $APP_DIR"
+echo "  - API MCPO disponible sur: http://147.93.94.85:$PORT"
+echo "  - Documentation OpenAPI: http://147.93.94.85:$PORT/docs"
+echo "  - OpenAPI spec: http://147.93.94.85:$PORT/openapi.json"
 echo "  - Service systemd: $SERVICE_NAME"
-echo "  - Utilisateur: $USER_NAME"
-echo "  - Fichier de configuration: $APP_DIR/.env"
+echo "  - Répertoire: $APP_DIR"
 echo ""
-echo "🔧 Commandes utiles:"
-echo "  - Redémarrer: sudo systemctl restart $SERVICE_NAME"
-echo "  - Arrêter: sudo systemctl stop $SERVICE_NAME"
-echo "  - Voir les logs: sudo journalctl -u $SERVICE_NAME -f"
-echo "  - Voir le statut: sudo systemctl status $SERVICE_NAME"
+echo "🔧 Configuration OpenWebUI:"
+echo "  Settings → Admin → External Tools"
+echo "  URL: http://147.93.94.85:$PORT"
+echo ""
+echo "📖 Outils disponibles:"
+echo "  - analyze_csv_from_url"
+echo "  - analyze_csv_from_content" 
 echo ""
 echo "⚠️  N'oubliez pas de:"
 echo "  1. Modifier $APP_DIR/.env avec vos vraies clés API"
-echo "  2. Redémarrer le service après modification: sudo systemctl restart $SERVICE_NAME"
-echo "  3. Configurer OpenWebUI pour utiliser ce serveur MCP"
-echo ""
-echo "📖 Configuration OpenWebUI:"
-echo "  Ajoutez dans la configuration MCP d'OpenWebUI:"
-echo '  {'
-echo '    "mcpServers": {'
-echo '      "csv-analyzer": {'
-echo '        "command": "/opt/csv-analyzer-mcp/venv/bin/python",'
-echo '        "args": ["/opt/csv-analyzer-mcp/mcp_server.py"]'
-echo '      }'
-echo '    }'
-echo '  }'
+echo "  2. Redémarrer: sudo systemctl restart $SERVICE_NAME"
+echo "  3. Tester l'API: curl http://147.93.94.85:$PORT/docs"

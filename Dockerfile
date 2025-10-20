@@ -23,8 +23,12 @@ COPY .env* ./
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
+# Exposer le port
+EXPOSE 8091
+
 # Variables d'environnement
 ENV PYTHONUNBUFFERED=1
+ENV MCPO_PORT=8091
 
-# Commande pour démarrer le serveur MCP
-CMD ["python", "mcp_server.py"]
+# Commande pour démarrer MCPO avec le serveur MCP
+CMD ["mcpo", "--host", "0.0.0.0", "--port", "8091", "--api-key", "csv-analyzer-api-key", "--", "python", "mcp_server.py"]
