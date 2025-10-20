@@ -4,6 +4,7 @@ import os
 import tempfile
 import base64
 import pandas as pd
+import requests
 from dotenv import load_dotenv
 from e2b_code_interpreter import Sandbox
 from anthropic import Anthropic
@@ -92,7 +93,7 @@ if len(categorical_cols) > 0:
     fig, axes = plt.subplots(1, 2, figsize=(15, 6))
     
     # Revenus par catégorie
-    revenue_cols = [col for col in numeric_cols if 'revenue' in col.lower() or 'sales' in col.lower()]
+    revenue_cols = [col for col in df.select_dtypes(include=[np.number]).columns if 'revenue' in col.lower() or 'sales' in col.lower()]
     if revenue_cols:
         revenue_col = revenue_cols[0]
         category_revenue = df.groupby(cat_col)[revenue_col].sum()
@@ -147,16 +148,20 @@ print("-" * 40)
 insights = []
 
 # Croissance
-if date_cols and revenue_cols:
-    first_period = df[df[date_col] == df[date_col].min()][revenue_cols[0]].sum()
-    last_period = df[df[date_col] == df[date_col].max()][revenue_cols[0]].sum()
-    growth = ((last_period - first_period) / first_period) * 100
-    insights.append(f"Croissance revenue: {{growth:.1f}}% sur la période")
+if date_cols:
+    revenue_cols = [col for col in df.select_dtypes(include=[np.number]).columns if 'revenue' in col.lower() or 'sales' in col.lower()]
+    if revenue_cols:
+        first_period = df[df[date_col] == df[date_col].min()][revenue_cols[0]].sum()
+        last_period = df[df[date_col] == df[date_col].max()][revenue_cols[0]].sum()
+        growth = ((last_period - first_period) / first_period) * 100
+        insights.append(f"Croissance revenue: {{growth:.1f}}% sur la période")
 
 # Performance par catégorie
-if categorical_cols and revenue_cols:
-    best_category = df.groupby(categorical_cols[0])[revenue_cols[0]].sum().idxmax()
-    insights.append(f"Meilleure performance: {{best_category}}")
+if categorical_cols:
+    revenue_cols = [col for col in df.select_dtypes(include=[np.number]).columns if 'revenue' in col.lower() or 'sales' in col.lower()]
+    if revenue_cols:
+        best_category = df.groupby(categorical_cols[0])[revenue_cols[0]].sum().idxmax()
+        insights.append(f"Meilleure performance: {{best_category}}")
 
 # Tendances
 if len(numeric_cols) >= 2:
@@ -273,11 +278,18 @@ def index():
             "analyze": "/analyze (POST)"
         },
         "usage": {
-            "method": "POST",
-            "url": "/analyze",
-            "parameters": {
-                "csv_file": "Fichier CSV à analyser",
-                "analysis_request": "Description de l'analyse souhaitée (optionnel)"
+            "proxy_mode": {
+                "method": "GET",
+                "url": "/analyze?csv_url=https://example.com/data.csv&analysis_request=optional",
+                "description": "Mode proxy pour LLMs - télécharge et analyse un CSV depuis une URL"
+            },
+            "upload_mode": {
+                "method": "POST",
+                "url": "/analyze",
+                "parameters": {
+                    "csv_file": "Fichier CSV à analyser",
+                    "analysis_request": "Description de l'analyse souhaitée (optionnel)"
+                }
             }
         },
         "features": [
@@ -294,22 +306,57 @@ def index():
 def health():
     return jsonify({"status": "healthy"})
 
-@app.route('/analyze', methods=['POST'])
+@app.route('/analyze', methods=['GET', 'POST'])
 def analyze():
     try:
-        if 'csv_file' not in request.files:
-            return jsonify({"error": "No CSV file provided"}), 400
+        temp_csv_path = None
         
-        csv_file = request.files['csv_file']
-        if csv_file.filename == '':
-            return jsonify({"error": "No file selected"}), 400
+        # Mode proxy : URL fournie en paramètre GET
+        if request.method == 'GET':
+            csv_url = request.args.get('csv_url')
+            if not csv_url:
+                return jsonify({
+                    "error": "csv_url parameter required",
+                    "usage": "GET /analyze?csv_url=https://example.com/data.csv&analysis_request=optional"
+                }), 400
+            
+            analysis_request = request.args.get('analysis_request', 'Analyze this dataset comprehensively')
+            
+            # Télécharger le fichier CSV
+            try:
+                response = requests.get(csv_url, timeout=30)
+                response.raise_for_status()
+                
+                # Vérifier que c'est bien un CSV
+                if 'text/csv' not in response.headers.get('content-type', '') and not csv_url.endswith('.csv'):
+                    # Essayer quand même de parser comme CSV
+                    pass
+                
+                # Sauvegarder temporairement
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.csv', mode='wb') as temp_file:
+                    temp_file.write(response.content)
+                    temp_csv_path = temp_file.name
+                    
+            except requests.exceptions.RequestException as e:
+                return jsonify({
+                    "error": f"Failed to download CSV from URL: {str(e)}"
+                }), 400
         
-        analysis_request = request.form.get('analysis_request', 'Analyze this dataset comprehensively')
-        
-        # Sauvegarder temporairement
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as temp_file:
-            csv_file.save(temp_file.name)
-            temp_csv_path = temp_file.name
+        # Mode classique : fichier uploadé en POST
+        else:
+            if 'csv_file' not in request.files:
+                return jsonify({"error": "No CSV file provided"}), 400
+            
+            csv_file = request.files['csv_file']
+            if csv_file.filename == '':
+                return jsonify({"error": "No file selected"}), 400
+            
+            analysis_request = request.form.get('analysis_request', 'Analyze this dataset comprehensively')
+            
+            # Sauvegarder temporairement
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as temp_file:
+                csv_file.save(temp_file.name)
+                temp_csv_path = temp_file.name
         
         try:
             # Analyse garantie
@@ -318,11 +365,12 @@ def analyze():
             return jsonify({
                 "success": True,
                 "results": results,
-                "analysis_guaranteed": True
+                "analysis_guaranteed": True,
+                "method": request.method
             })
         
         finally:
-            if os.path.exists(temp_csv_path):
+            if temp_csv_path and os.path.exists(temp_csv_path):
                 os.unlink(temp_csv_path)
     
     except Exception as e:

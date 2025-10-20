@@ -8,4 +8,5 @@ numpy
 matplotlib
 seaborn
 scikit-learn
+requests
 gunicorn==21.2.0
