@@ -311,12 +311,26 @@ async def health_check():
 
 @app.get("/analyze")
 async def analyze_csv_proxy(
-    csv_url: str = Query(..., description="URL du fichier CSV à analyser"),
+    csv_url: Optional[str] = Query(None, description="URL du fichier CSV à analyser"),
     analysis_request: Optional[str] = Query("Analyze this dataset comprehensively", description="Description de l'analyse souhaitée")
 ):
     """
     Mode proxy pour LLMs - Télécharge et analyse un CSV depuis une URL
     """
+    if not csv_url:
+        return {
+            "success": False,
+            "error": "csv_url parameter is required",
+            "usage": {
+                "description": "CSV Analysis API - Proxy Mode",
+                "example": "GET /analyze?csv_url=https://example.com/data.csv&analysis_request=Analyze sales trends",
+                "parameters": {
+                    "csv_url": "Required - URL of the CSV file to analyze",
+                    "analysis_request": "Optional - Description of the analysis desired"
+                }
+            }
+        }
+    
     try:
         # Télécharger le fichier CSV
         try:
@@ -329,10 +343,14 @@ async def analyze_csv_proxy(
                 temp_csv_path = temp_file.name
                 
         except requests.exceptions.RequestException as e:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Failed to download CSV from URL: {str(e)}"
-            )
+            return {
+                "success": False,
+                "error": f"Failed to download CSV from URL: {str(e)}",
+                "usage": {
+                    "description": "Make sure the CSV URL is publicly accessible",
+                    "example": "GET /analyze?csv_url=https://raw.githubusercontent.com/plotly/datasets/master/iris.csv"
+                }
+            }
         
         try:
             # Analyse garantie
@@ -351,26 +369,43 @@ async def analyze_csv_proxy(
                 os.unlink(temp_csv_path)
     
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
+        return {
+            "success": False,
+            "error": f"Internal server error: {str(e)}",
+            "contact": "Check logs for more details"
+        }
 
 @app.post("/analyze")
 async def analyze_csv_upload(
-    csv_file: UploadFile = File(..., description="Fichier CSV à analyser"),
+    csv_file: Optional[UploadFile] = File(None, description="Fichier CSV à analyser"),
     analysis_request: Optional[str] = Form("Analyze this dataset comprehensively", description="Description de l'analyse souhaitée")
 ):
     """
     Mode upload classique - Upload d'un fichier CSV
     """
+    if not csv_file:
+        return {
+            "success": False,
+            "error": "csv_file is required for POST upload",
+            "usage": {
+                "description": "CSV Analysis API - Upload Mode",
+                "method": "POST",
+                "parameters": {
+                    "csv_file": "Required - CSV file to upload",
+                    "analysis_request": "Optional - Description of analysis desired"
+                },
+                "example": "curl -X POST -F 'csv_file=@data.csv' -F 'analysis_request=Analyze trends' /analyze"
+            }
+        }
+    
     try:
         # Vérifier que c'est un fichier CSV
         if not csv_file.filename.endswith('.csv'):
-            raise HTTPException(
-                status_code=400,
-                detail="File must be a CSV file"
-            )
+            return {
+                "success": False,
+                "error": "File must be a CSV file",
+                "received_filename": csv_file.filename
+            }
         
         # Sauvegarder temporairement
         with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as temp_file:
@@ -395,10 +430,11 @@ async def analyze_csv_upload(
                 os.unlink(temp_csv_path)
     
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
+        return {
+            "success": False,
+            "error": f"Internal server error: {str(e)}",
+            "contact": "Check logs for more details"
+        }
 
 if __name__ == "__main__":
     import uvicorn
