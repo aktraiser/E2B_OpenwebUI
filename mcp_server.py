@@ -227,12 +227,21 @@ def analyze_csv_with_guaranteed_results(csv_path_in_sandbox, analysis_request):
         else:
             # Traiter tous les résultats
             for result in execution.results:
-                if result.chart:
-                    # Chart interactif E2B
+                if result.png:
+                    # Chart PNG matplotlib (prioritaire)
+                    results.append({
+                        "type": "chart_image",
+                        "format": "png",
+                        "data": result.png,
+                        "description": "Graphique généré par E2B matplotlib"
+                    })
+                
+                elif result.chart:
+                    # Chart interactif E2B (fallback)
                     chart_data = {
                         "type": "interactive_chart",
-                        "chart_type": getattr(result.chart, 'type', 'unknown'),
-                        "title": getattr(result.chart, 'title', 'Chart'),
+                        "chart_type": getattr(result.chart, 'type', 'matplotlib'),
+                        "title": getattr(result.chart, 'title', 'Analyse'),
                         "x_label": getattr(result.chart, 'x_label', None),
                         "y_label": getattr(result.chart, 'y_label', None),
                         "elements": []
@@ -247,13 +256,6 @@ def analyze_csv_with_guaranteed_results(csv_path_in_sandbox, analysis_request):
                             })
                     
                     results.append(chart_data)
-                
-                elif result.png:
-                    # Chart statique PNG
-                    results.append({
-                        "type": "static_chart",
-                        "png_base64": result.png
-                    })
                 
                 elif result.text:
                     # Sortie texte
