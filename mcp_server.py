@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 MCP Server pour CSV Analyzer avec E2B
-Serveur MCP natif pour exposition via mcpo
+Serveur MCP natif pour exposition via mcpo avec CORS
 """
 
 import asyncio
@@ -18,8 +18,18 @@ from mcp.types import TextContent, Tool
 # Charger les variables d'environnement
 load_dotenv()
 
-# Créer le serveur MCP
+# Créer le serveur MCP avec CORS
 mcp = FastMCP("CSV Analyzer avec E2B")
+
+# Configuration CORS pour OpenWebUI
+@mcp.middleware("http")
+async def add_cors_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
 
 def generate_analysis_code(csv_path, analysis_request, csv_structure):
     """Génère directement le code d'analyse Python sans passer par Claude"""
