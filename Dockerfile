@@ -17,6 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copier le code de l'application
 COPY mcp_server.py .
+COPY sandbox/ ./sandbox/
 COPY .env* ./
 
 # Créer un utilisateur non-root pour la sécurité
