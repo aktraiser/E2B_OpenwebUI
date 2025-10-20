@@ -9,3 +9,5 @@ seaborn
 scikit-learn
 requests
 scipy
+crewai
+crewai-tools
