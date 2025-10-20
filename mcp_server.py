@@ -41,8 +41,9 @@ def analyze_csv_from_content(csv_content: str, analysis_request: str) -> Dict[st
         # Analyser la structure du CSV
         df = pd.read_csv(temp_csv_path)
         
-        print(f"📊 Analyse de {df.shape[0]} lignes et {df.shape[1]} colonnes")
-        print(f"🎯 Demande: {analysis_request}")
+        # Logs désactivés pour ne pas interférer avec JSONRPC
+        # print(f"📊 Analyse de {df.shape[0]} lignes et {df.shape[1]} colonnes")
+        # print(f"🎯 Demande: {analysis_request}")
         
         # Générer le code d'analyse (pourrait être fait par CrewAI)
         analysis_code = generate_analysis_code(analysis_request)
@@ -86,7 +87,7 @@ def analyze_csv_from_url(csv_url: str, analysis_request: str) -> Dict[str, Any]:
     """
     try:
         # Télécharger le CSV
-        print(f"📥 Téléchargement depuis {csv_url}")
+        # print(f"📥 Téléchargement depuis {csv_url}")  # Désactivé pour JSONRPC
         response = requests.get(csv_url)
         response.raise_for_status()
         
@@ -148,7 +149,8 @@ def get_analysis_capabilities() -> Dict[str, Any]:
     }
 
 if __name__ == "__main__":
-    print("🚀 Serveur MCP CrewAI démarré")
-    print("📊 Système multi-agents prêt pour l'analyse")
-    print("🤖 Agents disponibles: Data Explorer, Visualizer, ML Analyst, Business Intel, Researcher")
+    # Les print interfèrent avec le protocole JSONRPC de MCP
+    # print("🚀 Serveur MCP CrewAI démarré")
+    # print("📊 Système multi-agents prêt pour l'analyse")
+    # print("🤖 Agents disponibles: Data Explorer, Visualizer, ML Analyst, Business Intel, Researcher")
     mcp.run()
