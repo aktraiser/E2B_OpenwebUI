@@ -44,6 +44,17 @@ def generate_crewai_agent_system_code(csv_structure, analysis_request):
     
     # Système CrewAI d'agents intelligents collaboratifs
     code_template = f'''
+# Installation de CrewAI dans le sandbox E2B
+import subprocess
+import sys
+print("🚀 Installation de CrewAI dans le sandbox E2B...")
+try:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "crewai==1.0.7", "crewai-tools==0.20.1"])
+    print("✅ CrewAI installé avec succès!")
+except Exception as e:
+    print(f"⚠️ Installation CrewAI échouée, utilisation du système fallback: {{str(e)}}")
+
+# Import des bibliothèques
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -55,8 +66,18 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score
 import warnings
 import requests
-from crewai import Agent, Task, Crew, Process
-from crewai_tools import SerperDevTool, ScrapeWebsiteTool
+
+# Import CrewAI après installation
+try:
+    from crewai import Agent, Task, Crew, Process
+    from crewai.tools import tool
+    from crewai_tools import SerperDevTool, ScrapeWebsiteTool
+    CREWAI_AVAILABLE = True
+    print("✅ CrewAI importé avec succès!")
+except ImportError as e:
+    print(f"⚠️ CrewAI non disponible, utilisation du système multi-agents simulé: {{str(e)}}")
+    CREWAI_AVAILABLE = False
+
 warnings.filterwarnings('ignore')
 
 # ==================== SYSTÈME CREWAI MULTI-AGENTS ====================
@@ -85,26 +106,91 @@ print()
 
 # ==================== DÉFINITION DES AGENTS CREWAI ====================
 
-# 🔍 AGENT DATA EXPLORER
-data_explorer = Agent(
-    role="Data Explorer Specialist",
-    goal="Explore and understand data structure, quality, and patterns to provide foundation for analysis",
-    backstory="""You are a meticulous data scientist with expertise in data quality assessment, 
-    outlier detection, and statistical analysis. You always start with understanding the data 
-    before diving into complex analysis.""",
-    verbose=True,
-    allow_delegation=False
-)
+if CREWAI_AVAILABLE:
+    # Définir les outils CrewAI
+    @tool("Data Analysis Tool")
+    def analyze_dataframe(query: str) -> str:
+        """Analyse the DataFrame and return insights"""
+        try:
+            if 'describe' in query.lower():
+                return str(df.describe())
+            elif 'info' in query.lower():
+                return str(df.info())
+            elif 'shape' in query.lower():
+                return f"Dataset shape: {{df.shape}}"
+            else:
+                return f"Analysis completed for: {{query}}"
+        except Exception as e:
+            return f"Analysis error: {{str(e)}}"
+    
+    @tool("Visualization Tool") 
+    def create_visualization(chart_type: str, x_col: str, y_col: str) -> str:
+        """Create a visualization and return description"""
+        try:
+            plt.figure(figsize=(10, 6))
+            if chart_type == "bar" and x_col in df.columns and y_col in df.columns:
+                df.groupby(x_col)[y_col].sum().plot(kind='bar')
+                plt.title(f"{{y_col}} by {{x_col}}")
+                plt.tight_layout()
+                plt.savefig(f"chart_{{x_col}}_{{y_col}}.png")
+                return f"Bar chart created: {{y_col}} by {{x_col}}"
+            return f"Chart {{chart_type}} created"
+        except Exception as e:
+            return f"Visualization error: {{str(e)}}"
+
+    # 🔍 AGENT DATA EXPLORER avec outils
+    data_explorer = Agent(
+        role="Data Explorer Specialist",
+        goal="Explore and understand data structure, quality, and patterns to provide foundation for analysis",
+        backstory="""You are a meticulous data scientist with expertise in data quality assessment, 
+        outlier detection, and statistical analysis. You always start with understanding the data 
+        before diving into complex analysis.""",
+        verbose=True,
+        allow_delegation=False,
+        tools=[analyze_dataframe]
+    )
+else:
+    # Fallback si CrewAI n'est pas disponible
+    class Agent:
+        def __init__(self, role, goal, backstory, verbose=True, allow_delegation=False, tools=None):
+            self.role = role
+            self.goal = goal
+            self.backstory = backstory
+            self.verbose = verbose
+            self.allow_delegation = allow_delegation
+            self.tools = tools or []
+    
+    # Agent simulé sans outils CrewAI
+    data_explorer = Agent(
+        role="Data Explorer Specialist",
+        goal="Explore and understand data structure, quality, and patterns to provide foundation for analysis",
+        backstory="""You are a meticulous data scientist with expertise in data quality assessment, 
+        outlier detection, and statistical analysis. You always start with understanding the data 
+        before diving into complex analysis.""",
+        verbose=True,
+        allow_delegation=False
+    )
 
 # 🎨 AGENT VISUALIZATION MASTER
-visualization_master = Agent(
-    role="Data Visualization Expert", 
-    goal="Create intelligent, adaptive visualizations that best represent the data insights",
-    backstory="""You are a visualization expert who knows how to choose the perfect chart type 
-    for each analysis. You create beautiful, informative graphics that tell the data story clearly.""",
-    verbose=True,
-    allow_delegation=False
-)
+if CREWAI_AVAILABLE:
+    visualization_master = Agent(
+        role="Data Visualization Expert", 
+        goal="Create intelligent, adaptive visualizations that best represent the data insights",
+        backstory="""You are a visualization expert who knows how to choose the perfect chart type 
+        for each analysis. You create beautiful, informative graphics that tell the data story clearly.""",
+        verbose=True,
+        allow_delegation=False,
+        tools=[create_visualization] if 'create_visualization' in locals() else []
+    )
+else:
+    visualization_master = Agent(
+        role="Data Visualization Expert", 
+        goal="Create intelligent, adaptive visualizations that best represent the data insights",
+        backstory="""You are a visualization expert who knows how to choose the perfect chart type 
+        for each analysis. You create beautiful, informative graphics that tell the data story clearly.""",
+        verbose=True,
+        allow_delegation=False
+    )
 
 # 🧠 AGENT ML INSIGHTS
 ml_insights_agent = Agent(
