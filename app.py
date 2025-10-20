@@ -17,7 +17,17 @@ app = FastAPI(
     description="Service d'analyse de fichiers CSV avec génération automatique de graphiques interactifs",
     version="2.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    servers=[
+        {
+            "url": "http://localhost:8091",
+            "description": "Development server"
+        },
+        {
+            "url": "http://147.93.94.85:8091",
+            "description": "Production server"
+        }
+    ]
 )
 
 app.add_middleware(
@@ -309,13 +319,22 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
-@app.get("/analyze")
+@app.get("/analyze", 
+         summary="Analyze CSV from URL", 
+         description="Download and analyze a CSV file from a public URL",
+         tags=["CSV Analysis"])
 async def analyze_csv_proxy(
-    csv_url: Optional[str] = Query(None, description="URL du fichier CSV à analyser"),
-    analysis_request: Optional[str] = Query("Analyze this dataset comprehensively", description="Description de l'analyse souhaitée")
+    csv_url: Optional[str] = Query(None, description="URL du fichier CSV à analyser", example="https://raw.githubusercontent.com/plotly/datasets/master/iris.csv"),
+    analysis_request: Optional[str] = Query("Analyze this dataset comprehensively", description="Description de l'analyse souhaitée", example="Analyze sales trends and correlations")
 ):
     """
     Mode proxy pour LLMs - Télécharge et analyse un CSV depuis une URL
+    
+    Télécharge automatiquement un fichier CSV depuis une URL publique et effectue une analyse complète avec :
+    - Statistiques descriptives
+    - Visualisations automatiques 
+    - Analyse des corrélations
+    - Insights business
     """
     if not csv_url:
         return {
@@ -375,13 +394,22 @@ async def analyze_csv_proxy(
             "contact": "Check logs for more details"
         }
 
-@app.post("/analyze")
+@app.post("/analyze",
+          summary="Analyze uploaded CSV file", 
+          description="Upload and analyze a CSV file",
+          tags=["CSV Analysis"])
 async def analyze_csv_upload(
     csv_file: Optional[UploadFile] = File(None, description="Fichier CSV à analyser"),
-    analysis_request: Optional[str] = Form("Analyze this dataset comprehensively", description="Description de l'analyse souhaitée")
+    analysis_request: Optional[str] = Form("Analyze this dataset comprehensively", description="Description de l'analyse souhaitée", example="Analyze customer segmentation patterns")
 ):
     """
     Mode upload classique - Upload d'un fichier CSV
+    
+    Upload un fichier CSV et effectue une analyse complète avec :
+    - Statistiques descriptives automatiques
+    - Graphiques et visualisations
+    - Matrice de corrélation
+    - Insights et recommandations business
     """
     if not csv_file:
         return {
