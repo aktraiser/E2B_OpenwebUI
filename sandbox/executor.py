@@ -41,22 +41,40 @@ def execute_analysis_code(code: str, csv_data: str = None) -> dict:
             }
         
         # Collecter les résultats (graphiques, données)
-        if hasattr(execution, 'results'):
+        if hasattr(execution, 'results') and execution.results:
+            import base64
             for result in execution.results:
+                # Gérer les graphiques interactifs E2B
                 if hasattr(result, 'chart') and result.chart:
-                    results['results'].append({
+                    chart_data = {
                         'type': 'chart',
-                        'data': result.chart
-                    })
+                        'chart_type': str(getattr(result.chart, 'type', 'BAR')),
+                        'title': getattr(result.chart, 'title', ''),
+                        'x_label': getattr(result.chart, 'x_label', ''),
+                        'y_label': getattr(result.chart, 'y_label', ''),
+                        'elements': []
+                    }
+                    # Extraire les données du graphique
+                    if hasattr(result.chart, 'elements'):
+                        for element in result.chart.elements:
+                            chart_data['elements'].append({
+                                'label': str(getattr(element, 'label', '')),
+                                'value': float(getattr(element, 'value', 0)),
+                                'group': str(getattr(element, 'group', ''))
+                            })
+                    results['results'].append(chart_data)
+                # Gérer les images PNG (matplotlib/seaborn)
                 elif hasattr(result, 'png') and result.png:
                     results['results'].append({
                         'type': 'image',
-                        'data': result.png
+                        'format': 'png',
+                        'data': base64.b64encode(result.png).decode('utf-8')
                     })
+                # Gérer les données brutes
                 elif hasattr(result, 'data') and result.data:
                     results['results'].append({
                         'type': 'data',
-                        'content': result.data
+                        'content': str(result.data)
                     })
         
         return results
