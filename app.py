@@ -1,5 +1,5 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form
+from fastapi.middleware.cors import CORSMiddleware
 import os
 import tempfile
 import base64
@@ -8,11 +8,25 @@ import requests
 from dotenv import load_dotenv
 from e2b_code_interpreter import Sandbox
 from anthropic import Anthropic
+from typing import Optional
 
 load_dotenv()
 
-app = Flask(__name__)
-CORS(app)
+app = FastAPI(
+    title="CSV Analyzer avec E2B",
+    description="Service d'analyse de fichiers CSV avec génération automatique de graphiques interactifs",
+    version="2.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def generate_analysis_code(csv_path, analysis_request, csv_structure):
     """Génère directement le code d'analyse Python sans passer par Claude"""
@@ -113,6 +127,7 @@ if len(categorical_cols) > 0:
     plt.show()
 
 # 4. ANALYSE DE CORRÉLATION
+numeric_cols = df.select_dtypes(include=[np.number]).columns
 if len(numeric_cols) > 1:
     print("4. MATRICE DE CORRÉLATION")
     print("-" * 40)
@@ -266,119 +281,126 @@ def analyze_csv_with_guaranteed_results(csv_path_in_sandbox, analysis_request):
     finally:
         sbx.kill()
 
-@app.route('/', methods=['GET'])
-def index():
-    return jsonify({
+@app.get("/")
+async def root():
+    return {
         "service": "CSV Analyzer avec E2B",
-        "version": "1.0.0",
+        "version": "2.0.0",
         "status": "operational",
         "description": "Service d'analyse de fichiers CSV avec génération automatique de graphiques interactifs",
         "endpoints": {
             "health": "/health",
-            "analyze": "/analyze (POST)"
-        },
-        "usage": {
-            "proxy_mode": {
-                "method": "GET",
-                "url": "/analyze?csv_url=https://example.com/data.csv&analysis_request=optional",
-                "description": "Mode proxy pour LLMs - télécharge et analyse un CSV depuis une URL"
-            },
-            "upload_mode": {
-                "method": "POST",
-                "url": "/analyze",
-                "parameters": {
-                    "csv_file": "Fichier CSV à analyser",
-                    "analysis_request": "Description de l'analyse souhaitée (optionnel)"
-                }
-            }
+            "analyze_proxy": "/analyze (GET)",
+            "analyze_upload": "/analyze (POST)",
+            "docs": "/docs",
+            "openapi": "/openapi.json"
         },
         "features": [
             "Analyse automatique de structure CSV",
             "Génération de graphiques interactifs",
             "Insights business automatiques",
             "Corrélations et tendances",
-            "Compatible OpenWebUI"
+            "Compatible OpenWebUI via OpenAPI"
         ],
-        "powered_by": ["E2B Code Interpreter", "Flask", "Pandas", "Matplotlib"]
-    })
+        "powered_by": ["E2B Code Interpreter", "FastAPI", "Pandas", "Matplotlib"]
+    }
 
-@app.route('/health', methods=['GET'])
-def health():
-    return jsonify({"status": "healthy"})
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
 
-@app.route('/analyze', methods=['GET', 'POST'])
-def analyze():
+@app.get("/analyze")
+async def analyze_csv_proxy(
+    csv_url: str = Query(..., description="URL du fichier CSV à analyser"),
+    analysis_request: Optional[str] = Query("Analyze this dataset comprehensively", description="Description de l'analyse souhaitée")
+):
+    """
+    Mode proxy pour LLMs - Télécharge et analyse un CSV depuis une URL
+    """
     try:
-        temp_csv_path = None
-        
-        # Mode proxy : URL fournie en paramètre GET
-        if request.method == 'GET':
-            csv_url = request.args.get('csv_url')
-            if not csv_url:
-                return jsonify({
-                    "error": "csv_url parameter required",
-                    "usage": "GET /analyze?csv_url=https://example.com/data.csv&analysis_request=optional"
-                }), 400
-            
-            analysis_request = request.args.get('analysis_request', 'Analyze this dataset comprehensively')
-            
-            # Télécharger le fichier CSV
-            try:
-                response = requests.get(csv_url, timeout=30)
-                response.raise_for_status()
-                
-                # Vérifier que c'est bien un CSV
-                if 'text/csv' not in response.headers.get('content-type', '') and not csv_url.endswith('.csv'):
-                    # Essayer quand même de parser comme CSV
-                    pass
-                
-                # Sauvegarder temporairement
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.csv', mode='wb') as temp_file:
-                    temp_file.write(response.content)
-                    temp_csv_path = temp_file.name
-                    
-            except requests.exceptions.RequestException as e:
-                return jsonify({
-                    "error": f"Failed to download CSV from URL: {str(e)}"
-                }), 400
-        
-        # Mode classique : fichier uploadé en POST
-        else:
-            if 'csv_file' not in request.files:
-                return jsonify({"error": "No CSV file provided"}), 400
-            
-            csv_file = request.files['csv_file']
-            if csv_file.filename == '':
-                return jsonify({"error": "No file selected"}), 400
-            
-            analysis_request = request.form.get('analysis_request', 'Analyze this dataset comprehensively')
+        # Télécharger le fichier CSV
+        try:
+            response = requests.get(csv_url, timeout=30)
+            response.raise_for_status()
             
             # Sauvegarder temporairement
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as temp_file:
-                csv_file.save(temp_file.name)
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.csv', mode='wb') as temp_file:
+                temp_file.write(response.content)
                 temp_csv_path = temp_file.name
+                
+        except requests.exceptions.RequestException as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Failed to download CSV from URL: {str(e)}"
+            )
         
         try:
             # Analyse garantie
             results = analyze_csv_with_guaranteed_results(temp_csv_path, analysis_request)
             
-            return jsonify({
+            return {
                 "success": True,
                 "results": results,
                 "analysis_guaranteed": True,
-                "method": request.method
-            })
+                "method": "GET",
+                "source_url": csv_url
+            }
         
         finally:
             if temp_csv_path and os.path.exists(temp_csv_path):
                 os.unlink(temp_csv_path)
     
     except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
-if __name__ == '__main__':
+@app.post("/analyze")
+async def analyze_csv_upload(
+    csv_file: UploadFile = File(..., description="Fichier CSV à analyser"),
+    analysis_request: Optional[str] = Form("Analyze this dataset comprehensively", description="Description de l'analyse souhaitée")
+):
+    """
+    Mode upload classique - Upload d'un fichier CSV
+    """
+    try:
+        # Vérifier que c'est un fichier CSV
+        if not csv_file.filename.endswith('.csv'):
+            raise HTTPException(
+                status_code=400,
+                detail="File must be a CSV file"
+            )
+        
+        # Sauvegarder temporairement
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as temp_file:
+            content = await csv_file.read()
+            temp_file.write(content)
+            temp_csv_path = temp_file.name
+        
+        try:
+            # Analyse garantie
+            results = analyze_csv_with_guaranteed_results(temp_csv_path, analysis_request)
+            
+            return {
+                "success": True,
+                "results": results,
+                "analysis_guaranteed": True,
+                "method": "POST",
+                "filename": csv_file.filename
+            }
+        
+        finally:
+            if temp_csv_path and os.path.exists(temp_csv_path):
+                os.unlink(temp_csv_path)
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
+
+if __name__ == "__main__":
+    import uvicorn
     port = int(os.environ.get('PORT', 8000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    uvicorn.run(app, host='0.0.0.0', port=port)

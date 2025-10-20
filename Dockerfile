@@ -31,4 +31,4 @@ ENV PYTHONUNBUFFERED=1
 ENV PORT=8000
 
 # Commande pour démarrer l'application
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "300", "app:app"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
