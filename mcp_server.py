@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 MCP Server pour CSV Analyzer avec E2B
-Serveur MCP natif pour exposition via mcpo avec CORS
+Serveur MCP natif pour exposition via MCPO
 """
 
 import asyncio
@@ -18,181 +18,47 @@ from mcp.types import TextContent, Tool
 # Charger les variables d'environnement
 load_dotenv()
 
-# Créer le serveur MCP avec CORS
+# Créer le serveur MCP
 mcp = FastMCP("CSV Analyzer avec E2B")
 
-# Configuration CORS pour OpenWebUI
-@mcp.middleware("http")
-async def add_cors_headers(request, call_next):
-    response = await call_next(request)
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    response.headers["Access-Control-Allow-Credentials"] = "true"
-    return response
-
 def generate_analysis_code(csv_path, analysis_request, csv_structure):
-    """Génère directement le code d'analyse Python sans passer par Claude"""
+    """Génère un code d'analyse Python concis pour éviter les problèmes de tokens"""
     
-    code_template = f'''
+    code_template = '''
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
 import numpy as np
-from scipy import stats
-import warnings
-warnings.filterwarnings('ignore')
-
-# Configuration matplotlib pour charts interactifs
-plt.style.use('default')
-plt.rcParams['figure.figsize'] = (12, 8)
 
 # Charger les données
 df = pd.read_csv('dataset.csv')
 
-print("=== ANALYSE AUTOMATIQUE DES DONNÉES ===")
-print(f"Dataset shape: {{df.shape}}")
-print(f"Colonnes: {{list(df.columns)}}")
-print()
+print("=== ANALYSE CSV ===")
+print(f"Shape: {df.shape}")
+print(f"Colonnes: {list(df.columns)}")
 
-# 1. STATISTIQUES DESCRIPTIVES
-print("1. STATISTIQUES DESCRIPTIVES")
-print("-" * 40)
+# Statistiques descriptives
+print("\\nSTATISTIQUES:")
 print(df.describe())
-print()
 
-# 2. ANALYSE TEMPORELLE (si colonne date existe)
-date_cols = [col for col in df.columns if 'date' in col.lower() or 'time' in col.lower()]
-if date_cols:
-    date_col = date_cols[0]
-    df[date_col] = pd.to_datetime(df[date_col])
-    
-    print(f"2. ÉVOLUTION TEMPORELLE - {{date_col}}")
-    print("-" * 40)
-    
-    # Graphique temporel pour chaque métrique numérique
-    numeric_cols = df.select_dtypes(include=[np.number]).columns
-    
-    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
-    fig.suptitle('Évolution Temporelle des Métriques Clés', fontsize=16)
-    
-    for i, col in enumerate(numeric_cols[:4]):
-        ax = axes[i//2, i%2]
-        if 'product' in df.columns:
-            for product in df['product'].unique():
-                product_data = df[df['product'] == product]
-                monthly_data = product_data.groupby(date_col)[col].sum()
-                ax.plot(monthly_data.index, monthly_data.values, marker='o', label=product)
-        else:
-            monthly_data = df.groupby(date_col)[col].sum()
-            ax.plot(monthly_data.index, monthly_data.values, marker='o')
-        
-        ax.set_title(f'Évolution {{col}}')
-        ax.set_xlabel('Date')
-        ax.set_ylabel(col)
-        ax.legend()
-        ax.tick_params(axis='x', rotation=45)
-    
-    plt.tight_layout()
-    plt.show()
-
-# 3. COMPARAISON PAR CATÉGORIES
-categorical_cols = df.select_dtypes(include=['object']).columns
-categorical_cols = [col for col in categorical_cols if col not in date_cols]
-
-if len(categorical_cols) > 0:
-    cat_col = categorical_cols[0]  # Première colonne catégorielle
-    
-    print(f"3. ANALYSE PAR {{cat_col.upper()}}")
-    print("-" * 40)
-    
-    # Graphique comparatif
-    fig, axes = plt.subplots(1, 2, figsize=(15, 6))
-    
-    # Revenus par catégorie
-    revenue_cols = [col for col in df.select_dtypes(include=[np.number]).columns if 'revenue' in col.lower() or 'sales' in col.lower()]
-    if revenue_cols:
-        revenue_col = revenue_cols[0]
-        category_revenue = df.groupby(cat_col)[revenue_col].sum()
-        
-        axes[0].bar(category_revenue.index, category_revenue.values, color=['#2E86AB', '#A23B72', '#F18F01'])
-        axes[0].set_title(f'{{revenue_col}} total par {{cat_col}}')
-        axes[0].set_ylabel(revenue_col)
-        
-        # Performance temporelle par catégorie
-        if date_cols:
-            pivot_data = df.pivot_table(values=revenue_col, index=date_col, columns=cat_col, aggfunc='sum')
-            pivot_data.plot(kind='line', ax=axes[1], marker='o')
-            axes[1].set_title(f'Évolution {{revenue_col}} par {{cat_col}}')
-            axes[1].set_ylabel(revenue_col)
-    
-    plt.tight_layout()
-    plt.show()
-
-# 4. ANALYSE DE CORRÉLATION
+# Graphiques automatiques
 numeric_cols = df.select_dtypes(include=[np.number]).columns
-if len(numeric_cols) > 1:
-    print("4. MATRICE DE CORRÉLATION")
-    print("-" * 40)
-    
-    corr_matrix = df[numeric_cols].corr()
-    
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', center=0, 
-                square=True, fmt='.2f', cbar_kws={{"shrink": .8}})
-    plt.title('Matrice de Corrélation entre Variables')
+
+# Graphique de distribution
+if len(numeric_cols) > 0:
+    plt.figure(figsize=(12, 4))
+    for i, col in enumerate(numeric_cols[:3]):
+        plt.subplot(1, 3, i+1)
+        df[col].hist(bins=10)
+        plt.title(f'Distribution {col}')
     plt.tight_layout()
     plt.show()
-    
-    # Insights de corrélation
-    strong_corr = []
-    for i in range(len(corr_matrix.columns)):
-        for j in range(i+1, len(corr_matrix.columns)):
-            corr_val = corr_matrix.iloc[i,j]
-            if abs(corr_val) > 0.7:
-                strong_corr.append((corr_matrix.columns[i], corr_matrix.columns[j], corr_val))
-    
-    if strong_corr:
-        print("Corrélations fortes détectées:")
-        for col1, col2, corr in strong_corr:
-            print(f"  - {{col1}} ↔ {{col2}}: {{corr:.3f}}")
 
-# 5. INSIGHTS AUTOMATIQUES
-print()
-print("5. INSIGHTS CLÉS")
-print("-" * 40)
+# Insights simples
+print("\\n=== INSIGHTS ===")
+for col in numeric_cols:
+    print(f"- {col}: moyenne = {df[col].mean():.2f}")
 
-# Calcul des insights
-insights = []
-
-# Croissance
-if date_cols:
-    revenue_cols = [col for col in df.select_dtypes(include=[np.number]).columns if 'revenue' in col.lower() or 'sales' in col.lower()]
-    if revenue_cols:
-        first_period = df[df[date_col] == df[date_col].min()][revenue_cols[0]].sum()
-        last_period = df[df[date_col] == df[date_col].max()][revenue_cols[0]].sum()
-        growth = ((last_period - first_period) / first_period) * 100
-        insights.append(f"Croissance revenue: {{growth:.1f}}% sur la période")
-
-# Performance par catégorie
-if categorical_cols:
-    revenue_cols = [col for col in df.select_dtypes(include=[np.number]).columns if 'revenue' in col.lower() or 'sales' in col.lower()]
-    if revenue_cols:
-        best_category = df.groupby(categorical_cols[0])[revenue_cols[0]].sum().idxmax()
-        insights.append(f"Meilleure performance: {{best_category}}")
-
-# Tendances
-if len(numeric_cols) >= 2:
-    col1, col2 = numeric_cols[0], numeric_cols[1]
-    trend_corr = df[col1].corr(df[col2])
-    if abs(trend_corr) > 0.5:
-        insights.append(f"Corrélation {{trend_corr:.2f}} entre {{col1}} et {{col2}}")
-
-for insight in insights:
-    print(f"✓ {{insight}}")
-
-print()
-print("=== ANALYSE TERMINÉE ===")
+print("\\n=== TERMINÉ ===")
 '''
     
     return code_template
