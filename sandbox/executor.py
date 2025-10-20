@@ -1,193 +1,38 @@
 """
-Exécuteur pour le sandbox E2B - Lance CrewAI dans l'environnement isolé
+Exécuteur pour le sandbox E2B
+Le code d'analyse s'exécute ici, PAS CrewAI !
+CrewAI tourne sur le VPS et envoie du code ici.
 """
 
 from e2b_code_interpreter import Sandbox
-import tempfile
 import os
 
-def execute_crew_in_sandbox(csv_data: str, analysis_request: str) -> dict:
+def execute_analysis_code(code: str, csv_data: str = None) -> dict:
     """
-    Exécute l'analyse CrewAI complète dans le sandbox E2B
+    Exécute du code d'analyse dans le sandbox E2B
     
     Args:
-        csv_data: Contenu CSV en string ou chemin vers fichier
-        analysis_request: Demande d'analyse de l'utilisateur
+        code: Code Python à exécuter
+        csv_data: Données CSV optionnelles
         
     Returns:
-        Résultats de l'analyse avec graphiques et insights
+        Résultats de l'exécution
     """
-    
-    # Code CrewAI à exécuter dans le sandbox
-    crew_code = f'''
-# Installation rapide des dépendances si nécessaire
-import subprocess
-import sys
-
-try:
-    import crewai
-    print("✅ CrewAI déjà installé")
-except ImportError:
-    print("📦 Installation de CrewAI...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "--no-cache-dir", "pydantic==2.8.2", "crewai==0.70.1"])
-    
-try:
-    import pandas
-    import matplotlib
-    import seaborn
-except ImportError:
-    print("📦 Installation des bibliothèques d'analyse...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "--no-cache-dir", "pandas", "matplotlib", "seaborn"])
-
-# Import des bibliothèques
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-try:
-    from crewai.tools import tool
-    from crewai import Agent, Task, Crew
-    CREWAI_AVAILABLE = True
-    print("✅ CrewAI importé avec succès")
-except ImportError as e:
-    print(f"⚠️ CrewAI non disponible: {{e}}")
-    CREWAI_AVAILABLE = False
-
-# Charger les données
-print("📊 Chargement des données...")
-df = pd.read_csv('dataset.csv')
-print(f"Dataset: {{df.shape[0]}} lignes, {{df.shape[1]}} colonnes")
-
-# Définir l'outil principal d'analyse
-@tool("Python Analyzer")
-def analyze_data(query: str) -> str:
-    """Execute data analysis code"""
-    try:
-        # Analyse basée sur la requête
-        if "describe" in query.lower():
-            return str(df.describe())
-        elif "correlation" in query.lower():
-            return str(df.corr())
-        elif "missing" in query.lower():
-            return str(df.isnull().sum())
-        else:
-            return f"Analysis completed for: {{query}}"
-    except Exception as e:
-        return f"Error: {{str(e)}}"
-
-# Créer l'agent principal si CrewAI disponible
-if CREWAI_AVAILABLE:
-    analyst = Agent(
-        role='Senior Data Analyst',
-        goal='Perform comprehensive analysis of the dataset',
-        backstory="""You are an expert data analyst with 10+ years of experience.
-        You excel at finding patterns, creating visualizations, and providing insights.""",
-        tools=[analyze_data] if 'analyze_data' in locals() else [],
-        verbose=True
-    )
-    print("🤖 Agent CrewAI créé")
-else:
-    print("🔧 Mode analyse directe (sans CrewAI)")
-
-# Exécuter l'analyse avec ou sans CrewAI
-if CREWAI_AVAILABLE:
-    # Créer la tâche d'analyse
-    analysis_task = Task(
-        description=f"""
-        Analyze the loaded dataset and provide:
-        1. Data quality assessment
-        2. Key statistics and patterns
-        3. Relevant visualizations
-        4. Business insights
-        
-        User request: {analysis_request}
-        """,
-        agent=analyst,
-        expected_output="Complete analysis with visualizations and recommendations"
-    )
-
-    # Créer et exécuter la crew
-    print("🚀 Lancement de l'analyse CrewAI...")
-    crew = Crew(
-        agents=[analyst],
-        tasks=[analysis_task],
-        verbose=True
-    )
-
-    # Exécuter l'analyse
-    result = crew.kickoff()
-else:
-    # Analyse directe sans CrewAI
-    print("🚀 Analyse directe des données...")
-    result = f"Analyse de {{len(df)}} lignes avec {{len(df.columns)}} colonnes\\n"
-    result += f"Colonnes: {{df.columns.tolist()}}\\n"
-    result += f"Types: {{df.dtypes.to_dict()}}\\n"
-    result += str(df.describe())
-
-# Créer des visualisations
-print("📈 Génération des visualisations...")
-fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-
-# Graph 1: Distribution de la première colonne numérique
-numeric_cols = df.select_dtypes(include=['number']).columns
-if len(numeric_cols) > 0:
-    df[numeric_cols[0]].hist(ax=axes[0,0], bins=20)
-    axes[0,0].set_title(f'Distribution de {{numeric_cols[0]}}')
-
-# Graph 2: Corrélation
-if len(numeric_cols) > 1:
-    corr_matrix = df[numeric_cols].corr()
-    sns.heatmap(corr_matrix, annot=True, ax=axes[0,1], cmap='coolwarm')
-    axes[0,1].set_title('Matrice de corrélation')
-
-# Graph 3: Top categories
-categorical_cols = df.select_dtypes(include=['object']).columns
-if len(categorical_cols) > 0:
-    df[categorical_cols[0]].value_counts()[:10].plot(kind='bar', ax=axes[1,0])
-    axes[1,0].set_title(f'Top 10 {{categorical_cols[0]}}')
-
-# Graph 4: Résumé
-summary = f"Analyse CrewAI\\n"
-summary += f"Lignes: {{len(df)}}\\n"
-summary += f"Colonnes: {{len(df.columns)}}\\n"
-summary += f"Types: {{df.dtypes.value_counts().to_dict()}}"
-axes[1,1].text(0.1, 0.5, summary, fontsize=12)
-axes[1,1].axis('off')
-
-plt.tight_layout()
-plt.savefig('analysis_dashboard.png')
-plt.show()
-
-print("✅ Analyse CrewAI terminée!")
-print(f"\\nRésultat final:\\n{{result}}")
-'''
-    
-    # Exécuter dans le sandbox E2B
     with Sandbox.create() as sandbox:
-        # Écrire le CSV dans le sandbox
-        if os.path.exists(csv_data):
-            # C'est un fichier
-            with open(csv_data, 'r') as f:
-                csv_content = f.read()
-        else:
-            # C'est du contenu direct
-            csv_content = csv_data
-            
-        sandbox.files.write('dataset.csv', csv_content)
+        # Upload CSV si fourni
+        if csv_data:
+            sandbox.files.write('dataset.csv', csv_data)
         
-        # Exécuter le code CrewAI
-        print("🤖 Exécution de CrewAI dans le sandbox E2B...")
-        execution = sandbox.run_code(crew_code)
+        # Exécuter le code
+        execution = sandbox.run_code(code)
         
-        # Collecter les résultats
+        # Formater les résultats
         results = {
             'success': not execution.error,
             'output': execution.text if execution.text else "",
-            'logs': execution.logs,
             'results': []
         }
         
-        # Ajouter les erreurs si présentes
         if execution.error:
             results['error'] = {
                 'name': execution.error.name,
@@ -195,17 +40,121 @@ print(f"\\nRésultat final:\\n{{result}}")
                 'traceback': execution.error.traceback
             }
         
-        # Traiter les résultats (graphiques, données, etc.)
-        for result in execution.results:
-            if result.chart:
-                results['results'].append({
-                    'type': 'chart',
-                    'data': result.chart
-                })
-            elif result.data:
-                results['results'].append({
-                    'type': 'data',
-                    'content': result.data
-                })
+        # Collecter les résultats (graphiques, données)
+        if hasattr(execution, 'results'):
+            for result in execution.results:
+                if hasattr(result, 'chart') and result.chart:
+                    results['results'].append({
+                        'type': 'chart',
+                        'data': result.chart
+                    })
+                elif hasattr(result, 'png') and result.png:
+                    results['results'].append({
+                        'type': 'image',
+                        'data': result.png
+                    })
+                elif hasattr(result, 'data') and result.data:
+                    results['results'].append({
+                        'type': 'data',
+                        'content': result.data
+                    })
         
         return results
+
+def generate_analysis_code(analysis_request: str) -> str:
+    """
+    Génère du code d'analyse basé sur la demande
+    (Ceci pourrait être fait par CrewAI sur le VPS)
+    """
+    return f'''
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+
+# Charger les données
+df = pd.read_csv('dataset.csv')
+print(f"📊 Dataset: {{df.shape[0]}} lignes, {{df.shape[1]}} colonnes")
+print(f"📋 Colonnes: {{df.columns.tolist()}}")
+
+# Analyse demandée: {analysis_request}
+
+# 1. Statistiques descriptives
+print("\\n📈 STATISTIQUES DESCRIPTIVES")
+print("="*50)
+print(df.describe())
+
+# 2. Informations sur les données
+print("\\n📋 INFORMATIONS DATASET")  
+print("="*50)
+missing = df.isnull().sum()
+if missing.sum() > 0:
+    print("Valeurs manquantes:")
+    for col, count in missing[missing > 0].items():
+        print(f"  • {{col}}: {{count}} ({{count/len(df)*100:.1f}}%)")
+else:
+    print("✅ Aucune valeur manquante")
+
+# 3. Visualisations
+fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+fig.suptitle('Dashboard d\\'analyse', fontsize=14, fontweight='bold')
+
+# Distribution première colonne numérique
+numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+if numeric_cols:
+    df[numeric_cols[0]].hist(ax=axes[0,0], bins=20, edgecolor='black')
+    axes[0,0].set_title(f'Distribution {{numeric_cols[0]}}')
+
+# Top catégories
+categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
+if categorical_cols:
+    df[categorical_cols[0]].value_counts()[:10].plot(kind='bar', ax=axes[0,1])
+    axes[0,1].set_title(f'Top 10 {{categorical_cols[0]}}')
+
+# Corrélations
+if len(numeric_cols) >= 2:
+    corr_matrix = df[numeric_cols].corr()
+    sns.heatmap(corr_matrix, annot=True, ax=axes[1,0], cmap='coolwarm', fmt='.2f')
+    axes[1,0].set_title('Matrice de corrélation')
+
+# Résumé
+summary_text = f"Résumé:\\n"
+summary_text += f"• Lignes: {{len(df)}}\\n"
+summary_text += f"• Colonnes: {{len(df.columns)}}\\n"
+summary_text += f"• Types: {{df.dtypes.value_counts().to_dict()}}"
+axes[1,1].text(0.1, 0.5, summary_text, fontsize=10, va='center')
+axes[1,1].axis('off')
+
+plt.tight_layout()
+plt.show()
+
+# 4. Insights automatiques
+print("\\n💡 INSIGHTS")
+print("="*50)
+
+# Corrélations fortes
+if len(numeric_cols) >= 2:
+    corr_matrix = df[numeric_cols].corr()
+    strong_corr = []
+    for i in range(len(numeric_cols)):
+        for j in range(i+1, len(numeric_cols)):
+            corr_val = abs(corr_matrix.iloc[i, j])
+            if corr_val > 0.7:
+                strong_corr.append((numeric_cols[i], numeric_cols[j], corr_val))
+    
+    if strong_corr:
+        print("Corrélations fortes détectées:")
+        for c1, c2, val in strong_corr:
+            print(f"  • {{c1}} ↔ {{c2}}: {{val:.2f}}")
+
+# Outliers
+for col in numeric_cols[:3]:
+    Q1 = df[col].quantile(0.25)
+    Q3 = df[col].quantile(0.75)
+    IQR = Q3 - Q1
+    outliers = ((df[col] < (Q1 - 1.5 * IQR)) | (df[col] > (Q3 + 1.5 * IQR))).sum()
+    if outliers > 0:
+        print(f"  • {{outliers}} outliers dans {{col}}")
+
+print("\\n✅ ANALYSE TERMINÉE")
+'''

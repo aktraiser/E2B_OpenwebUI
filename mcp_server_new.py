@@ -10,7 +10,7 @@ from typing import Dict, Any
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 from mcp.types import TextContent
-from sandbox import execute_crew_in_sandbox
+from sandbox.executor import execute_analysis_code, generate_analysis_code
 import pandas as pd
 import requests
 
@@ -44,8 +44,13 @@ def analyze_csv_from_content(csv_content: str, analysis_request: str) -> Dict[st
         print(f"📊 Analyse de {df.shape[0]} lignes et {df.shape[1]} colonnes")
         print(f"🎯 Demande: {analysis_request}")
         
-        # Exécuter l'analyse CrewAI dans le sandbox E2B
-        results = execute_crew_in_sandbox(temp_csv_path, analysis_request)
+        # Générer le code d'analyse (pourrait être fait par CrewAI)
+        analysis_code = generate_analysis_code(analysis_request)
+        
+        # Exécuter l'analyse dans le sandbox E2B
+        with open(temp_csv_path, 'r') as f:
+            csv_content = f.read()
+        results = execute_analysis_code(analysis_code, csv_content)
         
         # Nettoyer
         os.unlink(temp_csv_path)
