@@ -1,48 +1,25 @@
-from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import os
+#!/usr/bin/env python3
+"""
+MCP Server pour CSV Analyzer avec E2B
+Serveur MCP natif pour OpenWebUI
+"""
+
+import asyncio
 import tempfile
-import base64
+import os
 import pandas as pd
 import requests
+from typing import Any, Dict, List
 from dotenv import load_dotenv
 from e2b_code_interpreter import Sandbox
-from anthropic import Anthropic
-from typing import Optional
-import io
+from mcp.server.fastmcp import FastMCP
+from mcp.types import TextContent, Tool
 
+# Charger les variables d'environnement
 load_dotenv()
 
-class CSVAnalysisRequest(BaseModel):
-    csv_content: str
-    analysis_request: Optional[str] = "Analyze this dataset comprehensively"
-
-app = FastAPI(
-    title="CSV Analyzer avec E2B",
-    description="Service d'analyse de fichiers CSV avec génération automatique de graphiques interactifs",
-    version="2.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    servers=[
-        {
-            "url": "http://localhost:8091",
-            "description": "Development server"
-        },
-        {
-            "url": "http://147.93.94.85:8091",
-            "description": "Production server"
-        }
-    ]
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Créer le serveur MCP
+mcp = FastMCP("CSV Analyzer avec E2B")
 
 def generate_analysis_code(csv_path, analysis_request, csv_structure):
     """Génère directement le code d'analyse Python sans passer par Claude"""
@@ -297,154 +274,27 @@ def analyze_csv_with_guaranteed_results(csv_path_in_sandbox, analysis_request):
     finally:
         sbx.kill()
 
-@app.get("/")
-async def root():
-    return {
-        "service": "CSV Analyzer avec E2B",
-        "version": "2.0.0",
-        "status": "operational",
-        "description": "Service d'analyse de fichiers CSV avec génération automatique de graphiques interactifs",
-        "endpoints": {
-            "health": "/health",
-            "analyze_proxy": "/analyze (GET)",
-            "analyze_upload": "/analyze (POST)",
-            "docs": "/docs",
-            "openapi": "/openapi.json"
-        },
-        "features": [
-            "Analyse automatique de structure CSV",
-            "Génération de graphiques interactifs",
-            "Insights business automatiques",
-            "Corrélations et tendances",
-            "Compatible OpenWebUI via OpenAPI"
-        ],
-        "powered_by": ["E2B Code Interpreter", "FastAPI", "Pandas", "Matplotlib"]
-    }
-
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
-
-@app.get("/analyze", 
-         summary="Analyze CSV from URL", 
-         description="Download and analyze a CSV file from a public URL",
-         tags=["CSV Analysis"])
-async def analyze_csv_proxy(
-    csv_url: Optional[str] = Query(None, description="URL du fichier CSV à analyser", example="https://raw.githubusercontent.com/plotly/datasets/master/iris.csv"),
-    analysis_request: Optional[str] = Query("Analyze this dataset comprehensively", description="Description de l'analyse souhaitée", example="Analyze sales trends and correlations")
-):
+# Outil MCP 1: Analyse CSV depuis URL
+@mcp.tool()
+def analyze_csv_from_url(csv_url: str, analysis_request: str = "Analyze this dataset comprehensively") -> Dict[str, Any]:
     """
-    Mode proxy pour LLMs - Télécharge et analyse un CSV depuis une URL
+    Télécharge et analyse un fichier CSV depuis une URL publique.
     
-    Télécharge automatiquement un fichier CSV depuis une URL publique et effectue une analyse complète avec :
-    - Statistiques descriptives
-    - Visualisations automatiques 
-    - Analyse des corrélations
-    - Insights business
+    Args:
+        csv_url: URL publique du fichier CSV à analyser
+        analysis_request: Description de l'analyse souhaitée
+    
+    Returns:
+        Résultats d'analyse avec graphiques et insights
     """
-    if not csv_url:
-        return {
-            "success": False,
-            "error": "csv_url parameter is required",
-            "usage": {
-                "description": "CSV Analysis API - Proxy Mode",
-                "example": "GET /analyze?csv_url=https://example.com/data.csv&analysis_request=Analyze sales trends",
-                "parameters": {
-                    "csv_url": "Required - URL of the CSV file to analyze",
-                    "analysis_request": "Optional - Description of the analysis desired"
-                }
-            }
-        }
-    
     try:
         # Télécharger le fichier CSV
-        try:
-            response = requests.get(csv_url, timeout=30)
-            response.raise_for_status()
-            
-            # Sauvegarder temporairement
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.csv', mode='wb') as temp_file:
-                temp_file.write(response.content)
-                temp_csv_path = temp_file.name
-                
-        except requests.exceptions.RequestException as e:
-            return {
-                "success": False,
-                "error": f"Failed to download CSV from URL: {str(e)}",
-                "usage": {
-                    "description": "Make sure the CSV URL is publicly accessible",
-                    "example": "GET /analyze?csv_url=https://raw.githubusercontent.com/plotly/datasets/master/iris.csv"
-                }
-            }
-        
-        try:
-            # Analyse garantie
-            results = analyze_csv_with_guaranteed_results(temp_csv_path, analysis_request)
-            
-            return {
-                "success": True,
-                "results": results,
-                "analysis_guaranteed": True,
-                "method": "GET",
-                "source_url": csv_url
-            }
-        
-        finally:
-            if temp_csv_path and os.path.exists(temp_csv_path):
-                os.unlink(temp_csv_path)
-    
-    except Exception as e:
-        return {
-            "success": False,
-            "error": f"Internal server error: {str(e)}",
-            "contact": "Check logs for more details"
-        }
-
-@app.post("/analyze",
-          summary="Analyze uploaded CSV file", 
-          description="Upload and analyze a CSV file",
-          tags=["CSV Analysis"])
-async def analyze_csv_upload(
-    csv_file: Optional[UploadFile] = File(None, description="Fichier CSV à analyser"),
-    analysis_request: Optional[str] = Form("Analyze this dataset comprehensively", description="Description de l'analyse souhaitée", example="Analyze customer segmentation patterns")
-):
-    """
-    Mode upload classique - Upload d'un fichier CSV
-    
-    Upload un fichier CSV et effectue une analyse complète avec :
-    - Statistiques descriptives automatiques
-    - Graphiques et visualisations
-    - Matrice de corrélation
-    - Insights et recommandations business
-    """
-    if not csv_file:
-        return {
-            "success": False,
-            "error": "csv_file is required for POST upload",
-            "usage": {
-                "description": "CSV Analysis API - Upload Mode",
-                "method": "POST",
-                "parameters": {
-                    "csv_file": "Required - CSV file to upload",
-                    "analysis_request": "Optional - Description of analysis desired"
-                },
-                "example": "curl -X POST -F 'csv_file=@data.csv' -F 'analysis_request=Analyze trends' /analyze"
-            }
-        }
-    
-    try:
-        # Vérifier que c'est un fichier CSV
-        if not csv_file.filename.endswith('.csv'):
-            return {
-                "success": False,
-                "error": "File must be a CSV file",
-                "received_filename": csv_file.filename
-            }
+        response = requests.get(csv_url, timeout=30)
+        response.raise_for_status()
         
         # Sauvegarder temporairement
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as temp_file:
-            content = await csv_file.read()
-            temp_file.write(content)
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.csv', mode='wb') as temp_file:
+            temp_file.write(response.content)
             temp_csv_path = temp_file.name
         
         try:
@@ -455,39 +305,49 @@ async def analyze_csv_upload(
                 "success": True,
                 "results": results,
                 "analysis_guaranteed": True,
-                "method": "POST",
-                "filename": csv_file.filename
+                "method": "URL_DOWNLOAD",
+                "source_url": csv_url
             }
         
         finally:
             if temp_csv_path and os.path.exists(temp_csv_path):
                 os.unlink(temp_csv_path)
-    
+                
+    except requests.exceptions.RequestException as e:
+        return {
+            "success": False,
+            "error": f"Failed to download CSV from URL: {str(e)}",
+            "help": "Make sure the CSV URL is publicly accessible"
+        }
     except Exception as e:
         return {
             "success": False,
-            "error": f"Internal server error: {str(e)}",
-            "contact": "Check logs for more details"
+            "error": f"Analysis failed: {str(e)}"
         }
 
-@app.post("/analyze-content",
-          summary="Analyze CSV content directly", 
-          description="Analyze CSV data provided as text content - LLM optimized",
-          tags=["CSV Analysis"])
-async def analyze_csv_content(request: CSVAnalysisRequest):
+# Outil MCP 2: Analyse CSV depuis contenu texte
+@mcp.tool()
+def analyze_csv_from_content(csv_content: str, analysis_request: str = "Analyze this dataset comprehensively") -> Dict[str, Any]:
     """
-    Analyse CSV à partir du contenu texte - Optimisé pour les LLMs
+    Analyse un fichier CSV depuis son contenu texte.
     
-    Accepte le contenu CSV directement en JSON et effectue une analyse complète :
-    - Parsing automatique du CSV
-    - Statistiques descriptives
-    - Visualisations et graphiques
-    - Insights business automatiques
+    Args:
+        csv_content: Contenu du fichier CSV en texte brut
+        analysis_request: Description de l'analyse souhaitée
+    
+    Returns:
+        Résultats d'analyse avec graphiques et insights
     """
     try:
+        if not csv_content or csv_content.strip() == "":
+            return {
+                "success": False,
+                "error": "csv_content cannot be empty"
+            }
+        
         # Créer un fichier temporaire avec le contenu CSV
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv', encoding='utf-8') as temp_file:
-            temp_file.write(request.csv_content)
+            temp_file.write(csv_content)
             temp_csv_path = temp_file.name
         
         try:
@@ -496,24 +356,25 @@ async def analyze_csv_content(request: CSVAnalysisRequest):
             if df_test.empty:
                 return {
                     "success": False,
-                    "error": "CSV content is empty or invalid"
+                    "error": "CSV content is empty or invalid format"
                 }
             
             # Analyse garantie
-            results = analyze_csv_with_guaranteed_results(temp_csv_path, request.analysis_request)
+            results = analyze_csv_with_guaranteed_results(temp_csv_path, analysis_request)
             
             return {
                 "success": True,
                 "results": results,
                 "analysis_guaranteed": True,
-                "method": "JSON_CONTENT",
-                "dataset_shape": list(df_test.shape)
+                "method": "TEXT_CONTENT",
+                "dataset_shape": list(df_test.shape),
+                "columns": list(df_test.columns)
             }
         
         finally:
             if temp_csv_path and os.path.exists(temp_csv_path):
                 os.unlink(temp_csv_path)
-    
+                
     except Exception as e:
         return {
             "success": False,
@@ -521,7 +382,49 @@ async def analyze_csv_content(request: CSVAnalysisRequest):
             "help": "Make sure the csv_content is valid CSV format"
         }
 
+# Ressource MCP: Informations sur le service
+@mcp.resource("service://info")
+def get_service_info() -> str:
+    """Informations sur le service CSV Analyzer"""
+    return '''{
+        "service": "CSV Analyzer avec E2B",
+        "version": "2.0.0-MCP",
+        "description": "Serveur MCP pour l'analyse de fichiers CSV avec E2B Code Interpreter",
+        "capabilities": [
+            "Analyse automatique de structure CSV",
+            "Génération de graphiques interactifs",
+            "Insights business automatiques",
+            "Corrélations et tendances",
+            "Compatible OpenWebUI via MCP"
+        ],
+        "tools": [
+            "analyze_csv_from_url",
+            "analyze_csv_from_content"
+        ],
+        "powered_by": ["E2B Code Interpreter", "MCP", "Python"]
+    }'''
+
+# Prompt MCP: Template d'analyse
+@mcp.prompt()
+def csv_analysis_prompt(dataset_description: str = "dataset", focus: str = "comprehensive analysis") -> str:
+    """
+    Template de prompt pour l'analyse CSV
+    
+    Args:
+        dataset_description: Description du dataset
+        focus: Type d'analyse à privilégier
+    """
+    return f"""Effectue une analyse {focus} approfondie de ce {dataset_description}.
+
+L'analyse doit inclure :
+- Statistiques descriptives détaillées
+- Visualisations pertinentes (graphiques temporels, comparaisons, corrélations)
+- Identification des tendances et patterns
+- Insights business et recommandations
+- Détection d'anomalies ou points d'intérêt
+
+Utilise les outils d'analyse CSV disponibles pour obtenir des résultats complets avec graphiques interactifs."""
+
 if __name__ == "__main__":
-    import uvicorn
-    port = int(os.environ.get('PORT', 8000))
-    uvicorn.run(app, host='0.0.0.0', port=port)
+    # Démarrer le serveur MCP
+    mcp.run()

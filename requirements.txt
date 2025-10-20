@@ -1,12 +1,10 @@
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
+fastmcp
 python-dotenv==1.0.0
 e2b-code-interpreter
-anthropic
 pandas
 numpy
 matplotlib
 seaborn
 scikit-learn
 requests
-python-multipart
+scipy

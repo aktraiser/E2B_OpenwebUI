@@ -16,19 +16,15 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copier le code de l'application
-COPY app.py .
+COPY mcp_server.py .
 COPY .env* ./
 
 # Créer un utilisateur non-root pour la sécurité
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
-# Exposer le port
-EXPOSE 8000
-
 # Variables d'environnement
 ENV PYTHONUNBUFFERED=1
-ENV PORT=8000
 
-# Commande pour démarrer l'application
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Commande pour démarrer le serveur MCP
+CMD ["python", "mcp_server.py"]

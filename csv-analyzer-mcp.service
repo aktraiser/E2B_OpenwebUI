@@ -1,0 +1,21 @@
+[Unit]
+Description=CSV Analyzer MCP Server
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=mcp
+Group=mcp
+WorkingDirectory=/opt/csv-analyzer-mcp
+Environment=PYTHONUNBUFFERED=1
+Environment=E2B_API_KEY=your_e2b_key_here
+ExecStart=/opt/csv-analyzer-mcp/venv/bin/python mcp_server.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=csv-analyzer-mcp
+
+[Install]
+WantedBy=multi-user.target
