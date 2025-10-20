@@ -42,40 +42,51 @@ def execute_analysis_code(code: str, csv_data: str = None) -> dict:
         
         # Collecter les résultats (graphiques, données)
         if hasattr(execution, 'results') and execution.results:
-            import base64
             for result in execution.results:
-                # Gérer les graphiques interactifs E2B
-                if hasattr(result, 'chart') and result.chart:
+                # Méthode 1: Utiliser _repr_png_ pour les images matplotlib/seaborn
+                if hasattr(result, '_repr_png_'):
+                    png_data = result._repr_png_()
+                    if png_data:
+                        results['results'].append({
+                            'type': 'image',
+                            'format': 'png',
+                            'data': png_data  # Déjà en base64 selon la doc E2B
+                        })
+                # Méthode 2: Accès direct à l'attribut png si présent
+                elif hasattr(result, 'png') and result.png:
+                    import base64
+                    results['results'].append({
+                        'type': 'image', 
+                        'format': 'png',
+                        'data': base64.b64encode(result.png).decode('utf-8')
+                    })
+                # Méthode 3: Gérer les graphiques interactifs E2B
+                elif hasattr(result, 'chart') and result.chart:
                     chart_data = {
                         'type': 'chart',
-                        'chart_type': str(getattr(result.chart, 'type', 'BAR')),
+                        'chart_type': str(getattr(result.chart, 'type', 'UNKNOWN')),
                         'title': getattr(result.chart, 'title', ''),
                         'x_label': getattr(result.chart, 'x_label', ''),
                         'y_label': getattr(result.chart, 'y_label', ''),
                         'elements': []
                     }
                     # Extraire les données du graphique
-                    if hasattr(result.chart, 'elements'):
+                    if hasattr(result.chart, 'elements') and result.chart.elements:
                         for element in result.chart.elements:
                             chart_data['elements'].append({
                                 'label': str(getattr(element, 'label', '')),
-                                'value': float(getattr(element, 'value', 0)),
-                                'group': str(getattr(element, 'group', ''))
+                                'value': float(getattr(element, 'value', 0)) if hasattr(element, 'value') else 0,
+                                'group': str(getattr(element, 'group', '')) if hasattr(element, 'group') else ''
                             })
                     results['results'].append(chart_data)
-                # Gérer les images PNG (matplotlib/seaborn)
-                elif hasattr(result, 'png') and result.png:
-                    results['results'].append({
-                        'type': 'image',
-                        'format': 'png',
-                        'data': base64.b64encode(result.png).decode('utf-8')
-                    })
-                # Gérer les données brutes
-                elif hasattr(result, 'data') and result.data:
-                    results['results'].append({
-                        'type': 'data',
-                        'content': str(result.data)
-                    })
+                # Méthode 4: Texte ou données brutes
+                elif hasattr(result, '__str__'):
+                    text_content = str(result)
+                    if text_content and text_content != 'None':
+                        results['results'].append({
+                            'type': 'text',
+                            'content': text_content
+                        })
         
         return results
 
@@ -144,7 +155,7 @@ axes[1,1].text(0.1, 0.5, summary_text, fontsize=10, va='center')
 axes[1,1].axis('off')
 
 plt.tight_layout()
-plt.show()
+plt.show()  # E2B capture automatiquement les graphiques matplotlib
 
 # 4. Insights automatiques
 print("\\n💡 INSIGHTS")
