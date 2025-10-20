@@ -20,18 +20,38 @@ def execute_crew_in_sandbox(csv_data: str, analysis_request: str) -> dict:
     
     # Code CrewAI à exécuter dans le sandbox
     crew_code = f'''
-# Installation des dépendances avec versions compatibles
+# Installation rapide des dépendances si nécessaire
 import subprocess
 import sys
-print("📦 Installation de CrewAI et E2B...")
-subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "pydantic==2.8.2", "crewai==0.70.1", "pandas", "matplotlib", "seaborn"])
+
+try:
+    import crewai
+    print("✅ CrewAI déjà installé")
+except ImportError:
+    print("📦 Installation de CrewAI...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "--no-cache-dir", "pydantic==2.8.2", "crewai==0.70.1"])
+    
+try:
+    import pandas
+    import matplotlib
+    import seaborn
+except ImportError:
+    print("📦 Installation des bibliothèques d'analyse...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "--no-cache-dir", "pandas", "matplotlib", "seaborn"])
 
 # Import des bibliothèques
-from crewai.tools import tool
-from crewai import Agent, Task, Crew, LLM
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+try:
+    from crewai.tools import tool
+    from crewai import Agent, Task, Crew
+    CREWAI_AVAILABLE = True
+    print("✅ CrewAI importé avec succès")
+except ImportError as e:
+    print(f"⚠️ CrewAI non disponible: {{e}}")
+    CREWAI_AVAILABLE = False
 
 # Charger les données
 print("📊 Chargement des données...")
@@ -55,41 +75,54 @@ def analyze_data(query: str) -> str:
     except Exception as e:
         return f"Error: {{str(e)}}"
 
-# Créer l'agent principal
-analyst = Agent(
-    role='Senior Data Analyst',
-    goal='Perform comprehensive analysis of the dataset',
-    backstory="""You are an expert data analyst with 10+ years of experience.
-    You excel at finding patterns, creating visualizations, and providing insights.""",
-    tools=[analyze_data],
-    llm=LLM(model="gpt-4o")
-)
+# Créer l'agent principal si CrewAI disponible
+if CREWAI_AVAILABLE:
+    analyst = Agent(
+        role='Senior Data Analyst',
+        goal='Perform comprehensive analysis of the dataset',
+        backstory="""You are an expert data analyst with 10+ years of experience.
+        You excel at finding patterns, creating visualizations, and providing insights.""",
+        tools=[analyze_data] if 'analyze_data' in locals() else [],
+        verbose=True
+    )
+    print("🤖 Agent CrewAI créé")
+else:
+    print("🔧 Mode analyse directe (sans CrewAI)")
 
-# Créer la tâche d'analyse
-analysis_task = Task(
-    description="""
-    Analyze the loaded dataset and provide:
-    1. Data quality assessment
-    2. Key statistics and patterns
-    3. Relevant visualizations
-    4. Business insights
-    
-    User request: {analysis_request}
-    """,
-    agent=analyst,
-    expected_output="Complete analysis with visualizations and recommendations"
-)
+# Exécuter l'analyse avec ou sans CrewAI
+if CREWAI_AVAILABLE:
+    # Créer la tâche d'analyse
+    analysis_task = Task(
+        description=f"""
+        Analyze the loaded dataset and provide:
+        1. Data quality assessment
+        2. Key statistics and patterns
+        3. Relevant visualizations
+        4. Business insights
+        
+        User request: {analysis_request}
+        """,
+        agent=analyst,
+        expected_output="Complete analysis with visualizations and recommendations"
+    )
 
-# Créer et exécuter la crew
-print("🚀 Lancement de l'analyse CrewAI...")
-crew = Crew(
-    agents=[analyst],
-    tasks=[analysis_task],
-    verbose=True
-)
+    # Créer et exécuter la crew
+    print("🚀 Lancement de l'analyse CrewAI...")
+    crew = Crew(
+        agents=[analyst],
+        tasks=[analysis_task],
+        verbose=True
+    )
 
-# Exécuter l'analyse
-result = crew.kickoff()
+    # Exécuter l'analyse
+    result = crew.kickoff()
+else:
+    # Analyse directe sans CrewAI
+    print("🚀 Analyse directe des données...")
+    result = f"Analyse de {{len(df)}} lignes avec {{len(df.columns)}} colonnes\\n"
+    result += f"Colonnes: {{df.columns.tolist()}}\\n"
+    result += f"Types: {{df.dtypes.to_dict()}}\\n"
+    result += str(df.describe())
 
 # Créer des visualisations
 print("📈 Génération des visualisations...")

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+tex#!/usr/bin/env python3
 """
 MCP Server pour CSV Analyzer avec E2B
 Serveur MCP natif pour exposition via MCPO
