@@ -20,16 +20,15 @@ def execute_crew_in_sandbox(csv_data: str, analysis_request: str) -> dict:
     
     # Code CrewAI à exécuter dans le sandbox
     crew_code = f'''
-# Installation des dépendances
+# Installation des dépendances avec versions compatibles
 import subprocess
 import sys
 print("📦 Installation de CrewAI et E2B...")
-subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "crewai", "e2b-code-interpreter", "pandas", "matplotlib", "seaborn"])
+subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "pydantic==2.8.2", "crewai==0.70.1", "pandas", "matplotlib", "seaborn"])
 
 # Import des bibliothèques
 from crewai.tools import tool
 from crewai import Agent, Task, Crew, LLM
-from e2b_code_interpreter import Sandbox
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
