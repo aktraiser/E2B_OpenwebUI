@@ -51,31 +51,9 @@ sudo -u $USER_NAME $APP_DIR/venv/bin/pip install -r $APP_DIR/requirements.txt
 echo "🔐 Configuration des permissions..."
 sudo chown -R $USER_NAME:$USER_NAME $APP_DIR
 
-# 8. Créer le service systemd pour MCPO
-echo "⚙️  Création du service systemd MCPO..."
-sudo tee /etc/systemd/system/$SERVICE_NAME.service > /dev/null <<EOF
-[Unit]
-Description=CSV Analyzer MCPO Server
-After=network.target
-Wants=network.target
-
-[Service]
-Type=simple
-User=$USER_NAME
-Group=$USER_NAME
-WorkingDirectory=$APP_DIR
-Environment=PYTHONUNBUFFERED=1
-EnvironmentFile=$APP_DIR/.env
-ExecStart=$APP_DIR/venv/bin/mcpo --host 0.0.0.0 --port $PORT --api-key "csv-analyzer-api-key" -- $APP_DIR/venv/bin/python $APP_DIR/mcp_server.py
-Restart=always
-RestartSec=10
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=$SERVICE_NAME
-
-[Install]
-WantedBy=multi-user.target
-EOF
+# 8. Installer le service systemd pour MCPO
+echo "⚙️  Installation du service systemd MCPO..."
+sudo cp csv-analyzer-mcpo.service /etc/systemd/system/$SERVICE_NAME.service
 
 sudo systemctl daemon-reload
 sudo systemctl enable $SERVICE_NAME
