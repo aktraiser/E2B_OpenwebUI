@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import os
 import tempfile
 import base64
@@ -9,8 +10,13 @@ from dotenv import load_dotenv
 from e2b_code_interpreter import Sandbox
 from anthropic import Anthropic
 from typing import Optional
+import io
 
 load_dotenv()
+
+class CSVAnalysisRequest(BaseModel):
+    csv_content: str
+    analysis_request: Optional[str] = "Analyze this dataset comprehensively"
 
 app = FastAPI(
     title="CSV Analyzer avec E2B",
@@ -462,6 +468,57 @@ async def analyze_csv_upload(
             "success": False,
             "error": f"Internal server error: {str(e)}",
             "contact": "Check logs for more details"
+        }
+
+@app.post("/analyze-content",
+          summary="Analyze CSV content directly", 
+          description="Analyze CSV data provided as text content",
+          tags=["CSV Analysis"])
+async def analyze_csv_content(request: CSVAnalysisRequest):
+    """
+    Analyse CSV à partir du contenu texte - Optimisé pour les LLMs
+    
+    Accepte le contenu CSV directement en JSON et effectue une analyse complète :
+    - Parsing automatique du CSV
+    - Statistiques descriptives
+    - Visualisations et graphiques
+    - Insights business automatiques
+    """
+    try:
+        # Créer un fichier temporaire avec le contenu CSV
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.csv', encoding='utf-8') as temp_file:
+            temp_file.write(request.csv_content)
+            temp_csv_path = temp_file.name
+        
+        try:
+            # Vérifier que le CSV est valide
+            df_test = pd.read_csv(temp_csv_path)
+            if df_test.empty:
+                return {
+                    "success": False,
+                    "error": "CSV content is empty or invalid"
+                }
+            
+            # Analyse garantie
+            results = analyze_csv_with_guaranteed_results(temp_csv_path, request.analysis_request)
+            
+            return {
+                "success": True,
+                "results": results,
+                "analysis_guaranteed": True,
+                "method": "JSON_CONTENT",
+                "dataset_shape": list(df_test.shape)
+            }
+        
+        finally:
+            if temp_csv_path and os.path.exists(temp_csv_path):
+                os.unlink(temp_csv_path)
+    
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to analyze CSV content: {str(e)}",
+            "help": "Make sure the csv_content is valid CSV format"
         }
 
 if __name__ == "__main__":
