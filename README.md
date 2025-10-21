@@ -1,167 +1,198 @@
-# CrewAI + MCP dans E2B Sandbox
+# 🤖 E2B + CrewAI + MCP pour OpenWebUI
 
-Architecture: **CrewAI et MCP tournent ensemble dans le même sandbox E2B**
+Système complet d'agents AI avec exécution de code sécurisée et outils de recherche via MCP.
 
-## 🏗️ Architecture
+## 📋 Vue d'Ensemble
+
+Ce projet permet à **OpenWebUI** d'utiliser des **agents CrewAI** tournant dans des **sandboxes E2B** avec accès à des **outils MCP** (recherche web, exécution de code, etc.).
+
+### Architecture en 3 niveaux:
 
 ```
-E2B Sandbox (créé via AsyncSandbox.beta_create)
-├── MCP Server (écoute sur localhost:8080)
-│   ├── Tool: duckduckgo_search
-│   ├── Tool: arxiv_search
-│   └── Tool: python_execution
+OpenWebUI (Interface + LLM)
+    ↓ MCP Protocol
+MCP Server (VPS: 147.93.94.85)
+    ↓ E2B SDK
+E2B Sandbox (MCP Gateway + CrewAI Agent)
+```
+
+## ✨ Fonctionnalités
+
+- 🐍 **Exécution de code Python** sécurisée via E2B Code Interpreter
+- 🔍 **Recherche web** via Browserbase, DuckDuckGo, Exa
+- 📚 **Recherche académique** via ArXiv
+- 🤖 **Agents CrewAI** avec raisonnement multi-étapes
+- ♻️ **Réutilisation de sandboxes** pour performance optimale
+- 🔒 **Isolation complète** - code exécuté dans le cloud
+
+## 🚀 Quick Start (Méthode Recommandée: Docker)
+
+### 1. Déploiement sur VPS avec Docker
+
+```bash
+# Connexion au VPS
+ssh root@147.93.94.85
+
+# Clone du projet
+cd /root
+git clone <repo> e2b-crewai-mcp
+cd e2b-crewai-mcp
+
+# Configuration des clés API
+cat > .env << 'EOF'
+E2B_API_KEY=your_e2b_key
+OPENAI_API_KEY=your_openai_key
+EOF
+
+# Démarrage avec Docker Compose
+docker-compose up -d
+
+# Vérifier que ça tourne
+docker-compose logs -f
+```
+
+### 2. Configuration OpenWebUI
+
+1. **Settings** → **Functions** → **+ Add Function**
+2. Ajouter une **OpenAPI Function**:
+   - **OpenAPI URL**: `http://147.93.94.85:8000/openapi.json`
+   - Ou visiter: `http://147.93.94.85:8000/docs` et importer depuis Swagger
+3. **Activer la fonction**
+
+### 3. Test
+
+Dans OpenWebUI:
+
+```
+Use the execute_crewai_task function to calculate the first 10 Fibonacci numbers
+```
+
+### 📖 Guide Complet
+
+Voir [DOCKER_DEPLOY.md](DOCKER_DEPLOY.md) pour le guide de déploiement Docker complet.
+
+---
+
+## 🔄 Alternative: Déploiement sans Docker
+
+Pour déploiement direct (sans Docker), voir [OPENWEBUI_SETUP.md](OPENWEBUI_SETUP.md).
+
+## 📦 Structure du Projet
+
+```
+.
+├── Dockerfile              # 🐳 Image Docker
+├── docker-compose.yml      # 🐳 Orchestration Docker
+├── mcp_server.py           # ⚙️ Serveur MCP
+├── crewai_agent.py         # 🤖 Agent CrewAI (E2B)
+├── requirements.txt        # 📦 Dépendances Python
+├── start_mcp_server.sh     # 🚀 Script démarrage (sans Docker)
+├── .env                    # 🔑 Configuration (à créer)
 │
-└── CrewAI API (écoute sur 0.0.0.0:8000)
-    ├── FastAPI server (api.py)
-    ├── CrewAI Agent (crew.py)
-    └── Tools MCP (tools.py)
-         └── HTTP calls → localhost:8080
+├── README.md               # 📖 Ce fichier
+├── DOCKER_DEPLOY.md        # 📖 Guide Docker (recommandé)
+├── OPENWEBUI_SETUP.md      # 📖 Guide OpenWebUI (sans Docker)
+└── VPS_DEPLOY_GUIDE.md     # 📖 Tests manuels
 ```
 
-## 📝 Comment ça fonctionne
+## 🔧 Fichiers Clés
 
-1. **Un sandbox E2B unique** est créé avec `AsyncSandbox.beta_create(mcp={...})`
-2. **Le MCP server démarre automatiquement** dans le sandbox sur `localhost:8080`
-3. **CrewAI tourne dans le même sandbox** et expose une API sur port `8000`
-4. **Les tools CrewAI** font des requêtes HTTP vers `localhost:8080` pour utiliser les MCP tools
+### [mcp_server.py](mcp_server.py)
 
-## 🔧 Fichiers
+Serveur MCP qui tourne sur le VPS et expose 3 outils à OpenWebUI:
 
-### `tools.py` - Tools CrewAI → MCP
-```python
-# Appelle le MCP server via HTTP
-def call_mcp_tool(tool_name, arguments):
-    requests.post("http://localhost:8080/tools/call", ...)
+- `execute_crewai_task` - Exécuter une tâche avec CrewAI
+- `list_sandboxes` - Lister les sandboxes actifs
+- `cleanup_sandbox` - Nettoyer un sandbox
+
+### [crewai_agent.py](crewai_agent.py)
+
+Agent CrewAI qui tourne dans le sandbox E2B avec:
+
+- **Tool 1:** `execute_python` - Exécution de code Python
+- **Tool 2:** `search_web` - Recherche web via MCP
+
+### [start_mcp_server.sh](start_mcp_server.sh)
+
+Script bash pour démarrer le serveur MCP avec vérifications
+
+## 🎯 Cas d'Usage
+
+### 1. Analyse de données
+
+```
+Analyze this dataset and create visualizations:
+[1, 5, 3, 8, 2, 9, 4, 7, 6]
+
+Use the execute_crewai_task tool.
 ```
 
-### `crew.py` - Agent CrewAI
-```python
-# Définit l'agent avec les tools MCP
-agent = Agent(
-    tools=[execute_python, search_duckduckgo, ...],
-    ...
-)
+### 2. Recherche + Synthèse
+
+```
+Research the latest developments in quantum computing
+and summarize the top 3 breakthroughs from 2024.
+
+Use the execute_crewai_task tool.
 ```
 
-### `api.py` - FastAPI Server
-```python
-# Expose l'agent CrewAI via HTTP
-@app.post("/execute")
-def execute_task(request):
-    crew = create_crew(request.task)
-    return crew.kickoff()
+### 3. Web Scraping + Analyse
+
+```
+Analyze the website https://news.ycombinator.com
+and extract the top 5 trending topics.
+
+Use the execute_crewai_task tool.
 ```
 
-## 🚀 Déploiement
+## ⚙️ Configuration
 
-### 1. Configuration
-
-Créer `.env`:
-```bash
-OPENAI_API_KEY=sk-...
-E2B_API_KEY=e2b_...
-MCP_URL=http://localhost:8080  # MCP server local
-```
-
-### 2. Créer le Sandbox
-
-Le sandbox est créé par votre code Python avec:
-```python
-sandbox = await AsyncSandbox.beta_create(
-    mcp={
-        "duckduckgo": {},
-        "arxiv": {"storagePath": "/"}
-    }
-)
-```
-
-Cela démarre automatiquement le MCP server.
-
-### 3. Lancer CrewAI dans le sandbox
-
-```python
-# Dans le sandbox, lancer l'API CrewAI
-await sandbox.commands.run("uvicorn api:app --host 0.0.0.0 --port 8000")
-```
-
-### 4. Exposer le port
-
-```python
-# Obtenir l'URL publique
-url = sandbox.get_host(8000)
-print(f"CrewAI API: {url}")
-```
-
-## 🧪 Test
-
-### Test local des tools
+### Variables d'Environnement Requises
 
 ```bash
-# Tester l'exécution Python
-curl -X POST http://localhost:8000/execute \
-  -H "Content-Type: application/json" \
-  -d '{"task": "Use execute_python to calculate 5 + 3"}'
+# Obligatoire
+E2B_API_KEY=e2b_xxx           # https://e2b.dev
+OPENAI_API_KEY=sk-xxx         # https://platform.openai.com
+
+# Optionnel - MCP Servers
+BROWSERBASE_API_KEY=          # https://browserbase.com
+BROWSERBASE_PROJECT_ID=
+GEMINI_API_KEY=               # Pour Browserbase
+EXA_API_KEY=                  # https://exa.ai
 ```
 
-### Vérifier MCP server
+## 🐛 Troubleshooting
 
-```bash
-# Lister les tools MCP disponibles
-curl -X POST http://localhost:8080/tools/list
-```
+| Erreur | Cause | Solution |
+|--------|-------|----------|
+| "MCP Server connection refused" | Serveur pas démarré | `ssh root@147.93.94.85 './start_mcp_server.sh'` |
+| "Missing environment variables" | .env mal configuré | Vérifier E2B_API_KEY et OPENAI_API_KEY |
+| "Sandbox creation failed" | Quota E2B dépassé | Vérifier dashboard E2B |
+| "Task timeout" | Tâche trop longue | Augmenter timeout dans mcp_server.py |
 
-## 📊 Variables d'environnement
+Voir [OPENWEBUI_SETUP.md](OPENWEBUI_SETUP.md) pour plus de détails.
 
-| Variable | Description | Défaut |
-|----------|-------------|---------|
-| `MCP_URL` | URL du MCP server | `http://localhost:8080` |
-| `MCP_TOKEN` | Token d'auth MCP (optionnel) | `` |
-| `OPENAI_API_KEY` | Clé API OpenAI | Requis |
-| `E2B_API_KEY` | Clé API E2B | Requis |
+## 💰 Coûts
 
-## 🐛 Debugging
+### E2B
+- Sandbox principal: ~$0.0001/seconde
+- Sandboxes code: ~$0.0001/seconde par exécution
+- **Optimisation:** Réutiliser les sandboxes avec `sandbox_id`
 
-### Vérifier que MCP tourne
+### OpenAI
+- GPT-4o: ~$0.005 par tâche CrewAI en moyenne
+- **Optimisation:** Utiliser GPT-4o-mini
 
-```bash
-# Dans le sandbox
-curl http://localhost:8080/health
-```
+## 📚 Documentation
 
-### Vérifier les tools MCP
+- **[DOCKER_DEPLOY.md](DOCKER_DEPLOY.md)** - 🐳 Guide de déploiement Docker (RECOMMANDÉ)
+- **[OPENWEBUI_SETUP.md](OPENWEBUI_SETUP.md)** - Guide OpenWebUI sans Docker + troubleshooting
+- **[VPS_DEPLOY_GUIDE.md](VPS_DEPLOY_GUIDE.md)** - Déploiement et tests manuels
+- **[E2B Docs](https://e2b.dev/docs)** - Documentation E2B
+- **[CrewAI Docs](https://docs.crewai.com)** - Documentation CrewAI
+- **[MCP Docs](https://modelcontextprotocol.io)** - Protocole MCP
+- **[mcpo GitHub](https://github.com/modelcontextprotocol/mcpo)** - MCP-to-OpenAPI proxy
 
-```bash
-curl -X POST http://localhost:8080/tools/list
-```
+---
 
-### Logs CrewAI
-
-```python
-# Activer verbose dans crew.py
-agent = Agent(..., verbose=True)
-crew = Crew(..., verbose=True)
-```
-
-## ⚠️ Erreurs Communes
-
-### "MCP call failed: Connection refused"
-→ Le MCP server n'est pas démarré dans le sandbox
-
-### "Timeout"
-→ MCP_URL incorrect ou firewall bloque localhost
-
-### "Tool not found"
-→ Le MCP server n'a pas été créé avec les bons MCP servers
-
-## 🎯 Prochaines Étapes
-
-1. ✅ Tools simplifiés (HTTP vers MCP local)
-2. ✅ Pas de création de sandbox imbriquée
-3. ⏳ Tester le déploiement complet
-4. ⏳ Vérifier que l'agent utilise les tools
-
-## 📚 Références
-
-- [E2B MCP Beta](https://e2b.dev/docs/mcp)
-- [CrewAI Tools](https://docs.crewai.com/tools)
-- [MCP Protocol](https://modelcontextprotocol.io/)
+**Questions?** Voir [DOCKER_DEPLOY.md](DOCKER_DEPLOY.md) ou ouvrir une issue.

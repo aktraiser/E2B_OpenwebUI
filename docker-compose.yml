@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  e2b-mcp-server:
+    build: .
+    container_name: e2b-crewai-mcp
+    ports:
+      - "8000:8000"
+    environment:
+      # Required API keys
+      - E2B_API_KEY=${E2B_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+
+      # Optional MCP server keys
+      - BROWSERBASE_API_KEY=${BROWSERBASE_API_KEY:-}
+      - BROWSERBASE_PROJECT_ID=${BROWSERBASE_PROJECT_ID:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - EXA_API_KEY=${EXA_API_KEY:-}
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    volumes:
+      # Mount logs directory (optional)
+      - ./logs:/app/logs
+    networks:
+      - e2b-network
+
+networks:
+  e2b-network:
+    driver: bridge
