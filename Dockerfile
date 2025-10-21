@@ -15,17 +15,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY *.py ./
 COPY config/ ./config/
 
-# Create logs directory inside app directory
-RUN mkdir -p /app/logs && \
-    chmod 755 /app/logs
-
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Create non-root user and fix permissions
+# Create non-root user and create logs directory with proper permissions
 RUN useradd -m -u 1000 crewai && \
-    chown -R crewai:crewai /app
+    mkdir -p /app/logs && \
+    chown -R crewai:crewai /app && \
+    chmod 755 /app/logs
 
 USER crewai
 

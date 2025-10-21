@@ -261,10 +261,10 @@ class SandboxPool:
                 # Always cleanup sandbox
                 if sandbox:
                     try:
-                        await asyncio.to_thread(sandbox.close)
-                        logger.info("Sandbox closed successfully")
+                        await asyncio.to_thread(sandbox.kill)
+                        logger.info("Sandbox killed successfully")
                     except Exception as e:
-                        logger.error(f"Error closing sandbox: {e}", exc_info=True)
+                        logger.error(f"Error killing sandbox: {e}", exc_info=True)
                     finally:
                         async with self._lock:
                             self.metrics.record_closure()
