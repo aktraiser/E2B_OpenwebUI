@@ -17,6 +17,13 @@ class CodeExecutionCrewVPS:
     """
     Production-ready CrewAI crew for Python code execution on VPS.
     """
+    
+    def __init__(self):
+        self._custom_task = None
+    
+    def set_custom_task(self, task_description: str):
+        """Set a custom task description"""
+        self._custom_task = task_description
 
     @agent
     def python_executor(self) -> Agent:
@@ -48,8 +55,23 @@ class CodeExecutionCrewVPS:
     @task
     def execute_task(self) -> Task:
         """Main execution task."""
-        return Task(
-            description="""Calculate how many times the letter 'r' appears in the word 'strawberry'.
+        # Use custom task if provided, otherwise default task
+        if self._custom_task:
+            description = self._custom_task
+            expected_output = """Clear answer with:
+1. The exact result
+2. Your reasoning
+3. Code used (if any)
+4. Verification"""
+        else:
+            description = """Calculate how many times the letter 'r' appears in the word 'strawberry'."""
+            expected_output = """Clear answer with:
+1. The exact count of 'r' in 'strawberry'
+2. Your reasoning
+3. Code used (if any)
+4. Verification"""
+        
+        description += """
 
 IMPORTANT:
 - Think analytically first
@@ -57,13 +79,12 @@ IMPORTANT:
 - If code is needed, write optimal code that runs once
 - Each execution costs money
 
-Choose the most efficient approach.""",
+Choose the most efficient approach."""
+        
+        return Task(
+            description=description,
             agent=self.python_executor(),
-            expected_output="""Clear answer with:
-1. The exact count of 'r' in 'strawberry'
-2. Your reasoning
-3. Code used (if any)
-4. Verification"""
+            expected_output=expected_output
         )
 
     @crew
