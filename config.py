@@ -12,7 +12,7 @@ class VPSConfig:
     """Configuration class for VPS deployment"""
 
     # ==================== API KEYS ====================
-    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
     E2B_API_KEY: str = os.getenv("E2B_API_KEY", "")
 
     # ==================== E2B TIMEOUTS ====================
@@ -64,8 +64,8 @@ class VPSConfig:
     @classmethod
     def validate(cls) -> tuple[bool, Optional[str]]:
         """Validate configuration before starting"""
-        if not cls.OPENAI_API_KEY:
-            return False, "OPENAI_API_KEY is required"
+        if not cls.ANTHROPIC_API_KEY:
+            return False, "ANTHROPIC_API_KEY is required"
 
         if not cls.E2B_API_KEY:
             return False, "E2B_API_KEY is required"

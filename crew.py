@@ -2,7 +2,7 @@
 CrewAI agents and crew definition for VPS deployment.
 Optimized for E2B sandbox usage with cost awareness.
 """
-from crewai import Agent, Task, Crew, Process, LLM
+from crewai import Agent, Task, Crew, Process
 from crewai.project import CrewBase, agent, crew, task
 from tools import execute_python
 from config import VPSConfig
@@ -34,7 +34,6 @@ class CodeExecutionCrewVPS:
 
             You excel at writing correct code on the first try, minimizing retries.""",
             tools=[execute_python],
-            llm=LLM(model="gpt-4o", temperature=0.1),
             verbose=True,
             allow_delegation=False,
             max_iter=VPSConfig.MAX_ITERATIONS,

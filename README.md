@@ -18,7 +18,7 @@ Production-ready CrewAI with E2B cloud sandboxes, optimized for VPS deployment w
 - **VPS**: 2GB+ RAM, 2 CPU cores minimum
 - **Docker**: Docker and docker-compose installed
 - **API Keys**:
-  - OpenAI API key ([get here](https://platform.openai.com/api-keys))
+  - Anthropic API key ([get here](https://console.anthropic.com/api))
   - E2B API key ([get here](https://e2b.dev/docs))
 
 ## 🚀 Quick Start
@@ -42,7 +42,7 @@ nano .env
 
 Required in `.env`:
 ```bash
-OPENAI_API_KEY=sk-your-key-here
+ANTHROPIC_API_KEY=sk-ant-api03-your-key-here
 E2B_API_KEY=e2b_your-key-here
 ```
 

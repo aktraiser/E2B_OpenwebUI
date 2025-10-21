@@ -12,9 +12,9 @@ if [ ! -f ".env" ]; then
 fi
 
 # Validate API keys in .env
-if ! grep -q "OPENAI_API_KEY=sk-" .env || ! grep -q "E2B_API_KEY=e2b_" .env; then
+if ! grep -q "ANTHROPIC_API_KEY=sk-ant" .env || ! grep -q "E2B_API_KEY=e2b_" .env; then
     echo "❌ Missing or invalid API keys in .env"
-    echo "💡 Make sure to set valid OPENAI_API_KEY and E2B_API_KEY"
+    echo "💡 Make sure to set valid ANTHROPIC_API_KEY and E2B_API_KEY"
     exit 1
 fi
 
