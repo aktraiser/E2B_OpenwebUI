@@ -52,7 +52,7 @@ class VPSConfig:
 
     # ==================== LOGGING ====================
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
-    LOG_FILE: str = os.getenv("LOG_FILE", "/var/log/crewai/app.log")
+    LOG_FILE: str = os.getenv("LOG_FILE", "/app/logs/app.log")
 
     # ==================== CODE LIMITS ====================
     # Maximum code length to prevent abuse
