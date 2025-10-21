@@ -1,86 +1,48 @@
 """
-CrewAI agents and crew definition for VPS deployment.
-Optimized for E2B sandbox usage with cost awareness.
+CrewAI setup for E2B MCP integration
 """
-from crewai import Agent, Task, Crew, Process, LLM
-from crewai.project import CrewBase, agent, crew, task
-from tools import execute_python
-from config import VPSConfig
-import logging
-import os
-
-logger = logging.getLogger(__name__)
+from crewai import Agent, Task, Crew
+from tools import execute_python, search_duckduckgo, search_arxiv, list_mcp_tools
 
 
-@CrewBase
-class CodeExecutionCrewVPS:
-    """
-    Production-ready CrewAI crew for Python code execution on VPS.
-    """
+def create_crew(task_description: str = None):
+    """Create a crew with MCP tools"""
     
-    def __init__(self):
-        self._custom_task = None
-    
-    def set_custom_task(self, task_description: str):
-        """Set a custom task description"""
-        self._custom_task = task_description
-
-    @agent
-    def python_executor(self) -> Agent:
-        """Python code execution agent with cost awareness."""
-        return Agent(
-            role="Python Code Executor",
-            goal="Execute Python code to solve tasks accurately and efficiently",
-            backstory="""You are a Python expert who can execute code in a secure sandbox.
-
-            When given a task:
-            1. Write clean, correct Python code to solve it
-            2. Use the execute_python tool to run your code
-            3. Return the results clearly
-
-            You ALWAYS use the execute_python tool when a task requires code execution.
-            You write efficient, working code on the first try.""",
-            tools=[execute_python],
-            llm=LLM(
-                model="gpt-4o-mini",
-                api_key=os.getenv("OPENAI_API_KEY")
-            ),
-            verbose=True,
-            allow_delegation=False,
-            max_iter=VPSConfig.MAX_ITERATIONS,
-            max_rpm=VPSConfig.MAX_RPM
-        )
-
-    @task
-    def execute_task(self) -> Task:
-        """Main execution task."""
-        # Use custom task if provided, otherwise default task
-        if self._custom_task:
-            description = self._custom_task
-            expected_output = """Clear answer with:
-1. The exact result
-2. Your reasoning
-3. Code used (if any)
-4. Verification"""
-        else:
-            description = """Calculate how many times the letter 'r' appears in the word 'strawberry'.
-
-Write Python code to count this and execute it using the execute_python tool."""
-            expected_output = """The exact count of 'r' in 'strawberry' with code execution results."""
+    # Research agent with MCP capabilities
+    agent = Agent(
+        role="Research Developer",
+        goal="Execute code and research using MCP servers in E2B sandbox",
+        backstory="""You are a researcher and developer with access to:
+        - Python code execution in E2B sandbox
+        - DuckDuckGo search via MCP
+        - ArXiv paper search via MCP
+        - Direct MCP tool access
         
-        return Task(
-            description=description,
-            agent=self.python_executor(),
-            expected_output=expected_output
-        )
-
-    @crew
-    def crew(self) -> Crew:
-        """Creates the code execution crew."""
-        return Crew(
-            agents=[self.python_executor()],
-            tasks=[self.execute_task()],
-            process=Process.sequential,
-            verbose=True,
-            max_rpm=VPSConfig.MAX_RPM
-        )
+        Use these tools to solve tasks comprehensively.""",
+        tools=[execute_python, search_duckduckgo, search_arxiv, list_mcp_tools],
+        verbose=True
+    )
+    
+    # Task
+    if not task_description:
+        task_description = "Calculate how many times the letter 'r' appears in 'strawberry'"
+    
+    task = Task(
+        description=f"""
+        Task: {task_description}
+        
+        Steps:
+        1. First list available MCP tools
+        2. Use appropriate tools to solve the task
+        3. If needed, execute Python code
+        4. Provide comprehensive results
+        """,
+        agent=agent,
+        expected_output="Complete solution with tool usage details"
+    )
+    
+    return Crew(
+        agents=[agent],
+        tasks=[task],
+        verbose=True
+    )
