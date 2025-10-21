@@ -94,7 +94,7 @@ export E2B_API_KEY="{os.getenv('E2B_API_KEY')}"
         # Install dependencies
         logger.info("Installing dependencies...")
         result = sbx.commands.run(
-            "bash -c 'source /root/.env_setup && pip install -q -r /root/requirements.txt'",
+            "bash -c 'chmod +x /root/.env_setup && source /root/.env_setup && pip install -q -r /root/requirements.txt'",
             timeout=180000  # 3 minutes
         )
 
@@ -157,7 +157,7 @@ print(json.dumps(output))
         # Execute the task
         logger.info(f"Executing CrewAI task in sandbox {sbx.sandbox_id}...")
         result = sbx.commands.run(
-            "bash -c 'source /root/.env_setup && cd /root && python task_runner.py'",
+            "bash -c 'chmod +x /root/.env_setup && source /root/.env_setup && cd /root && python task_runner.py'",
             timeout=300000  # 5 minutes for task execution
         )
 
