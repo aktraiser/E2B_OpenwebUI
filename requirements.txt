@@ -3,3 +3,5 @@ mcp>=1.0.0
 e2b-code-interpreter>=0.0.10
 python-dotenv>=1.0.0
 crewai>=0.28.0
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0

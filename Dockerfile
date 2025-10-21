@@ -12,17 +12,11 @@ RUN apt-get update && apt-get install -y \
 
 # Copy files first
 COPY mcp_server.py .
-COPY crewai_agent.py .
 COPY api_server.py .
 COPY requirements.txt .
 
-# Install ALL dependencies in system Python
-RUN pip install --no-cache-dir \
-    fastapi>=0.104.0 \
-    uvicorn[standard]>=0.24.0 \
-    mcp>=1.0.0 \
-    e2b>=1.0.0 \
-    python-dotenv>=1.0.0
+# Install dependencies from requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Expose port for HTTP API
 EXPOSE 8000
