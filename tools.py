@@ -1,124 +1,165 @@
 """
-CrewAI tools using E2B MCP client - Synchronous wrappers
+CrewAI tools pour utiliser MCP Gateway dans le même sandbox E2B
+IMPORTANT: Ce code tourne DANS le sandbox, pas à l'extérieur
 """
-import asyncio
+import requests
 import json
-from typing import Optional
 from crewai.tools import tool
-from mcp_client import MCPClient
+import os
 
-# Global MCP client instance
-_mcp_client: Optional[MCPClient] = None
-_loop: Optional[asyncio.AbstractEventLoop] = None
-
-
-def get_or_create_loop():
-    """Get or create event loop for async operations"""
-    global _loop
-    if _loop is None or _loop.is_closed():
-        _loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(_loop)
-    return _loop
+# MCP Gateway URL (tourne dans le même sandbox sur localhost)
+MCP_URL = os.getenv("MCP_URL", "http://localhost:8080")
 
 
-def run_async(coro):
-    """Run async coroutine in a safe way"""
-    loop = get_or_create_loop()
-    return loop.run_until_complete(coro)
+def call_mcp_tool(tool_name: str, arguments: dict) -> dict:
+    """
+    Appelle un tool MCP via le Gateway local
+
+    Args:
+        tool_name: Nom du tool MCP
+        arguments: Arguments du tool
+
+    Returns:
+        Résultat du tool
+    """
+    try:
+        response = requests.post(
+            f"{MCP_URL}/tools/call",
+            json={
+                "name": tool_name,
+                "arguments": arguments
+            },
+            timeout=60
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        return {"error": str(e)}
 
 
-async def get_mcp_client():
-    """Get or create MCP client"""
-    global _mcp_client
-    if _mcp_client is None:
-        _mcp_client = MCPClient()
-        await _mcp_client.create_sandbox()
-    return _mcp_client
-
-
-@tool("Execute Python Code")
+@tool("Python Interpreter")
 def execute_python(code: str) -> str:
-    """Execute Python code in E2B sandbox via MCP
+    """
+    Execute Python code via MCP server
+
+    IMPORTANT: N'utilise PAS Sandbox.create() car on est déjà dans un sandbox !
+    Appelle le MCP Gateway qui tourne localement.
 
     Args:
         code: Python code to execute
 
     Returns:
-        Execution output with results or errors
+        Execution output
 
     Example:
         >>> execute_python("print(5 + 3)")
-        "✅ Code executed successfully:\\n\\n8"
+        "8"
     """
-    async def _run():
-        try:
-            client = await get_mcp_client()
-            result = await client.execute_code(code)
-            if result:
-                return f"✅ Code executed successfully:\n\n{result}"
-            else:
-                return "✅ Code executed (no output)"
-        except Exception as e:
-            return f"❌ Error: {str(e)}"
+    try:
+        # Appel au MCP Gateway local
+        result = call_mcp_tool("python_execution", {"code": code})
 
-    return run_async(_run())
+        if "error" in result:
+            return f"❌ Error: {result['error']}"
+
+        # Extraire le résultat du format MCP
+        # Format MCP: {"content": [{"type": "text", "text": "..."}]}
+        content = result.get("content", [])
+        if content and len(content) > 0:
+            text = content[0].get("text", "")
+            return f"✅ Code executed:\n\n{text}"
+        else:
+            return "✅ Code executed (no output)"
+
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
 
 
 @tool("Search DuckDuckGo")
 def search_duckduckgo(query: str) -> str:
-    """Search the web using DuckDuckGo via MCP
+    """
+    Search the web using DuckDuckGo via MCP
 
     Args:
-        query: Search query string
+        query: Search query
 
     Returns:
-        Search results in JSON format
+        Search results
     """
-    async def _run():
-        try:
-            client = await get_mcp_client()
-            result = await client.call_tool("duckduckgo_search", {"query": query})
-            return f"✅ Search results:\n\n{json.dumps(result, indent=2)}"
-        except Exception as e:
-            return f"❌ Search error: {str(e)}"
+    try:
+        result = call_mcp_tool("duckduckgo_search", {"query": query})
 
-    return run_async(_run())
+        if "error" in result:
+            return f"❌ Search error: {result['error']}"
+
+        # Formater les résultats
+        content = result.get("content", [])
+        if content:
+            text = content[0].get("text", "")
+            return f"✅ Search results:\n\n{text}"
+        else:
+            return "No results found"
+
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
 
 
 @tool("Search ArXiv")
 def search_arxiv(query: str) -> str:
-    """Search ArXiv scientific papers via MCP
+    """
+    Search ArXiv papers via MCP
 
     Args:
-        query: Research topic or keywords
+        query: Research topic
 
     Returns:
-        ArXiv papers in JSON format
+        ArXiv papers
     """
-    async def _run():
-        try:
-            client = await get_mcp_client()
-            result = await client.call_tool("arxiv_search", {"query": query})
-            return f"✅ ArXiv results:\n\n{json.dumps(result, indent=2)}"
-        except Exception as e:
-            return f"❌ ArXiv error: {str(e)}"
+    try:
+        result = call_mcp_tool("arxiv_search", {"query": query})
 
-    return run_async(_run())
+        if "error" in result:
+            return f"❌ ArXiv error: {result['error']}"
+
+        content = result.get("content", [])
+        if content:
+            text = content[0].get("text", "")
+            return f"✅ ArXiv results:\n\n{text}"
+        else:
+            return "No papers found"
+
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
 
 
 @tool("List MCP Tools")
 def list_mcp_tools() -> str:
-    """List all available MCP tools in the E2B sandbox
+    """
+    List all available MCP tools in the Gateway
 
     Returns:
-        List of tools with descriptions in JSON format
+        List of available tools
     """
-    async def _run():
-        try:
-            client = await get_mcp_client()
-            tools = await client.list_tools()
-            return f"✅ Available MCP tools:\n\n{json.dumps(tools, indent=2)}"
-        except Exception as e:
-            return f"❌ Error listing tools: {str(e)}"
+    try:
+        response = requests.post(
+            f"{MCP_URL}/tools/list",
+            timeout=10
+        )
+        response.raise_for_status()
+        tools_data = response.json()
 
-    return run_async(_run())
+        # Formater la liste
+        tools = tools_data.get("tools", [])
+        if tools:
+            tool_list = []
+            for t in tools:
+                name = t.get("name", "unknown")
+                description = t.get("description", "No description")
+                tool_list.append(f"- {name}: {description}")
+
+            return f"✅ Available MCP tools:\n\n" + "\n".join(tool_list)
+        else:
+            return "No MCP tools available"
+
+    except Exception as e:
+        return f"❌ Error listing tools: {str(e)}"
