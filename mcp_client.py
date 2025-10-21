@@ -72,4 +72,4 @@ class MCPClient:
     async def close(self):
         """Close the sandbox"""
         if self.sandbox:
-            await self.sandbox.close()
+            await self.sandbox.aclose()
