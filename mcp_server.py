@@ -65,7 +65,11 @@ async def get_or_create_sandbox(sandbox_id: str = None) -> Sandbox:
                 "duckduckgo": {},  # No API key needed
                 "arxiv": {"storagePath": "/"},
             },
-            timeout=600  # 10 minutes
+            timeout=600,  # 10 minutes
+            envs={
+                "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
+                "E2B_API_KEY": os.getenv("E2B_API_KEY")
+            }
         )
 
         logger.info(f"Sandbox created: {sbx.sandbox_id}")
@@ -85,16 +89,12 @@ python-dotenv>=1.0.0
 """
         sbx.files.write("/root/requirements.txt", requirements)
 
-        # Set environment variables
-        env_vars = f"""export OPENAI_API_KEY="{os.getenv('OPENAI_API_KEY')}"
-export E2B_API_KEY="{os.getenv('E2B_API_KEY')}"
-"""
-        sbx.files.write("/root/.env_setup", env_vars)
+        # Environment variables are now set via E2B envs parameter above
 
         # Install dependencies
         logger.info("Installing dependencies...")
         result = sbx.commands.run(
-            "bash -c 'source /root/.env_setup && pip install -q -r /root/requirements.txt'",
+            "pip install -q -r /root/requirements.txt",
             timeout=180  # 3 minutes (seconds!)
         )
 
@@ -157,7 +157,7 @@ print(json.dumps(output))
         # Execute the task
         logger.info(f"Executing CrewAI task in sandbox {sbx.sandbox_id}...")
         result = sbx.commands.run(
-            "bash -c 'source /root/.env_setup && cd /root && python task_runner.py'",
+            "cd /root && python task_runner.py",
             timeout=300  # 5 minutes for task execution
         )
 
