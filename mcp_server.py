@@ -1,8 +1,8 @@
 """
-MCP Server for VPS
+MCP Server for VPS - Simple Version
 Exposes E2B + CrewAI tools to OpenWebUI via MCP protocol
 
-This server runs on the VPS and creates E2B sandboxes with CrewAI on demand.
+Simple approach using E2B Code Interpreter + CrewAI directly
 """
 import asyncio
 import json
@@ -11,7 +11,9 @@ from typing import Any
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
-from e2b import Sandbox
+from e2b_code_interpreter import Sandbox
+from crewai.tools import tool
+from crewai import Agent, Task, Crew, LLM
 import os
 from dotenv import load_dotenv
 
@@ -21,168 +23,81 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("e2b-crewai-mcp")
 
-# Global sandbox cache to reuse sandboxes
-_sandbox_cache = {}
-_sandbox_lock = asyncio.Lock()
-
-async def get_or_create_sandbox(sandbox_id: str = None) -> Sandbox:
+@tool("Python Interpreter")
+def execute_python(code: str) -> str:
     """
-    Get existing sandbox or create new one with MCP + CrewAI
-
-    Args:
-        sandbox_id: Optional sandbox ID to reuse
-
-    Returns:
-        Sandbox instance
+    Execute Python code and return the results.
     """
-    async with _sandbox_lock:
-        # Try to reuse existing sandbox
-        if sandbox_id and sandbox_id in _sandbox_cache:
-            try:
-                sbx = _sandbox_cache[sandbox_id]
-                # Test if still alive
-                sbx.commands.run("echo test", timeout=5000)
-                logger.info(f"Reusing existing sandbox: {sandbox_id}")
-                return sbx
-            except:
-                logger.warning(f"Sandbox {sandbox_id} not reachable, creating new one")
-                del _sandbox_cache[sandbox_id]
+    try:
+        with Sandbox.create() as sandbox:
+            execution = sandbox.run_code(code)
+            if execution.error:
+                return f"Error: {execution.error}"
+            return execution.text if execution.text else "Code executed successfully"
+    except Exception as e:
+        return f"Execution error: {str(e)}"
 
-        # Create new sandbox
-        logger.info("Creating new E2B sandbox with MCP Gateway...")
 
-        sbx = Sandbox.beta_create(
-            template="mcp-gateway",
-            mcp={
-                "browserbase": {
-                    "apiKey": os.getenv("BROWSERBASE_API_KEY", ""),
-                    "geminiApiKey": os.getenv("GEMINI_API_KEY", ""),
-                    "projectId": os.getenv("BROWSERBASE_PROJECT_ID", ""),
-                },
-                "exa": {
-                    "apiKey": os.getenv("EXA_API_KEY", ""),
-                },
-                "duckduckgo": {},  # No API key needed
-                "arxiv": {"storagePath": "/"},
-            },
-            timeout=600,  # 10 minutes
-            envs={
-                "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
-                "E2B_API_KEY": os.getenv("E2B_API_KEY")
-            }
-        )
+def create_crew(task_description: str):
+    """
+    Create a CrewAI crew with E2B tools
+    """
+    # Define the agent
+    python_executor = Agent(
+        role='Python Executor and Researcher',
+        goal='Execute Python code and solve complex tasks',
+        backstory='You are an expert Python programmer and researcher capable of executing code and solving problems.',
+        tools=[execute_python],
+        llm=LLM(
+            model="gpt-4o",
+            api_key=os.getenv("OPENAI_API_KEY")
+        ),
+        verbose=True
+    )
 
-        logger.info(f"Sandbox created: {sbx.sandbox_id}")
+    # Define the task
+    execute_task = Task(
+        description=task_description,
+        agent=python_executor,
+        expected_output="Complete solution with execution results"
+    )
 
-        # Upload CrewAI agent code
-        logger.info("Setting up CrewAI in sandbox...")
-        with open("crewai_agent.py", "r") as f:
-            agent_code = f.read()
+    # Create the crew
+    crew = Crew(
+        agents=[python_executor],
+        tasks=[execute_task],
+        verbose=True
+    )
 
-        sbx.files.write("/root/crewai_agent.py", agent_code)
-
-        # Create requirements
-        requirements = """crewai>=0.28.0
-e2b-code-interpreter>=0.0.10
-requests>=2.31.0
-python-dotenv>=1.0.0
-"""
-        sbx.files.write("/root/requirements.txt", requirements)
-
-        # Environment variables are now set via E2B envs parameter above
-
-        # Install dependencies
-        logger.info("Installing dependencies...")
-        result = sbx.commands.run(
-            "pip install -q -r /root/requirements.txt",
-            timeout=180  # 3 minutes (seconds!)
-        )
-
-        if result.exit_code != 0:
-            logger.error(f"Failed to install dependencies: {result.stderr}")
-            raise Exception(f"Dependency installation failed: {result.stderr}")
-
-        # Keep alive for 30 minutes
-        sbx.keep_alive(1800)
-
-        # Cache the sandbox
-        _sandbox_cache[sbx.sandbox_id] = sbx
-
-        logger.info(f"Sandbox ready: {sbx.sandbox_id}")
-        return sbx
+    return crew
 
 
 async def execute_crewai_task(task: str, sandbox_id: str = None) -> dict:
     """
-    Execute a task using CrewAI in E2B sandbox
-
+    Execute a task using CrewAI with E2B Code Interpreter
+    
     Args:
         task: Task description for CrewAI
-        sandbox_id: Optional sandbox ID to reuse
-
+        sandbox_id: Optional (not used in simple version)
+    
     Returns:
         Execution result
     """
     try:
-        # Get or create sandbox
-        sbx = await get_or_create_sandbox(sandbox_id)
-
-        # Create a temporary Python script to run the task
-        task_script = f'''
-from crewai_agent import create_crew
-import json
-
-task = """{task}"""
-
-try:
-    crew = create_crew(task)
-    result = crew.kickoff()
-    output = {{
-        "success": True,
-        "result": str(result),
-        "sandbox_id": "{sbx.sandbox_id}"
-    }}
-except Exception as e:
-    output = {{
-        "success": False,
-        "error": str(e),
-        "sandbox_id": "{sbx.sandbox_id}"
-    }}
-
-print(json.dumps(output))
-'''
-
-        sbx.files.write("/root/task_runner.py", task_script)
-
-        # Execute the task
-        logger.info(f"Executing CrewAI task in sandbox {sbx.sandbox_id}...")
-        result = sbx.commands.run(
-            "cd /root && python task_runner.py",
-            timeout=300  # 5 minutes for task execution
-        )
-
-        if result.exit_code != 0:
-            logger.error(f"Task execution failed: {result.stderr}")
-            return {
-                "success": False,
-                "error": f"Execution failed: {result.stderr}",
-                "sandbox_id": sbx.sandbox_id
-            }
-
-        # Parse the JSON output
-        try:
-            output = json.loads(result.stdout.strip())
-            logger.info(f"Task completed successfully in sandbox {sbx.sandbox_id}")
-            return output
-        except json.JSONDecodeError:
-            logger.error(f"Failed to parse output: {result.stdout}")
-            return {
-                "success": False,
-                "error": "Failed to parse task output",
-                "raw_output": result.stdout,
-                "sandbox_id": sbx.sandbox_id
-            }
-
+        logger.info(f"Executing CrewAI task: {task[:100]}...")
+        
+        # Create crew
+        crew = create_crew(task)
+        
+        # Execute task
+        result = crew.kickoff()
+        
+        logger.info("Task completed successfully")
+        return {
+            "success": True,
+            "result": str(result)
+        }
+        
     except Exception as e:
         logger.error(f"Error executing task: {str(e)}")
         return {
@@ -192,35 +107,20 @@ print(json.dumps(output))
 
 
 async def list_active_sandboxes() -> dict:
-    """List all active sandboxes in cache"""
+    """List active sandboxes (simple version - no caching)"""
     return {
-        "active_sandboxes": list(_sandbox_cache.keys()),
-        "count": len(_sandbox_cache)
+        "active_sandboxes": [],
+        "count": 0,
+        "note": "Simple version uses ephemeral sandboxes"
     }
 
 
 async def cleanup_sandbox(sandbox_id: str) -> dict:
-    """
-    Cleanup a specific sandbox
-
-    Args:
-        sandbox_id: Sandbox ID to cleanup
-
-    Returns:
-        Cleanup result
-    """
-    async with _sandbox_lock:
-        if sandbox_id in _sandbox_cache:
-            try:
-                sbx = _sandbox_cache[sandbox_id]
-                # E2B sandboxes auto-cleanup, just remove from cache
-                del _sandbox_cache[sandbox_id]
-                logger.info(f"Removed sandbox {sandbox_id} from cache")
-                return {"success": True, "message": f"Sandbox {sandbox_id} removed from cache"}
-            except Exception as e:
-                return {"success": False, "error": str(e)}
-        else:
-            return {"success": False, "error": f"Sandbox {sandbox_id} not found in cache"}
+    """Cleanup sandbox (simple version - auto cleanup)"""
+    return {
+        "success": True, 
+        "message": "Simple version uses auto-cleanup sandboxes"
+    }
 
 
 # Create MCP server
@@ -233,22 +133,20 @@ async def list_tools() -> list[Tool]:
     return [
         Tool(
             name="execute_crewai_task",
-            description="""Execute a task using CrewAI agent running in E2B sandbox with MCP tools.
+            description="""Execute a task using CrewAI agent with E2B Code Interpreter.
 
-The CrewAI agent has access to:
-- Python code execution (via E2B Code Interpreter)
-- Web search (via Browserbase MCP)
-- Research papers (via ArXiv MCP)
-- Web search (via DuckDuckGo MCP)
-- Academic search (via Exa MCP)
+The CrewAI agent can:
+- Execute Python code in secure E2B sandboxes
+- Perform calculations and data analysis
+- Solve complex programming problems
 
 Examples:
-- "Search for the latest AI research on transformers and summarize the findings"
-- "Analyze the website https://example.com and extract key information"
-- "Calculate the fibonacci sequence up to n=20 using Python"
-- "Research market trends for electric vehicles in 2024"
+- "Calculate 2 + 2 using Python"
+- "Analyze CSV data and create a summary"
+- "Calculate the fibonacci sequence up to n=20"
+- "Count how many r's are in the word 'strawberry'"
 
-The agent will intelligently use the appropriate tools to complete the task.""",
+The agent will use Python code execution to complete tasks.""",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -258,7 +156,7 @@ The agent will intelligently use the appropriate tools to complete the task.""",
                     },
                     "sandbox_id": {
                         "type": "string",
-                        "description": "Optional: Sandbox ID to reuse (improves performance)"
+                        "description": "Optional: Not used in simple version"
                     }
                 },
                 "required": ["task"]
@@ -266,7 +164,7 @@ The agent will intelligently use the appropriate tools to complete the task.""",
         ),
         Tool(
             name="list_sandboxes",
-            description="List all active E2B sandboxes currently cached for reuse",
+            description="List active E2B sandboxes (simple version uses ephemeral sandboxes)",
             inputSchema={
                 "type": "object",
                 "properties": {}
@@ -274,13 +172,13 @@ The agent will intelligently use the appropriate tools to complete the task.""",
         ),
         Tool(
             name="cleanup_sandbox",
-            description="Remove a sandbox from cache (it will be auto-cleaned by E2B)",
+            description="Cleanup sandbox (simple version uses auto-cleanup)",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "sandbox_id": {
                         "type": "string",
-                        "description": "Sandbox ID to cleanup"
+                        "description": "Sandbox ID (not used in simple version)"
                     }
                 },
                 "required": ["sandbox_id"]
@@ -318,14 +216,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
         )]
 
     elif name == "cleanup_sandbox":
-        sandbox_id = arguments.get("sandbox_id")
-
-        if not sandbox_id:
-            return [TextContent(
-                type="text",
-                text=json.dumps({"error": "sandbox_id parameter is required"})
-            )]
-
+        sandbox_id = arguments.get("sandbox_id", "")
         result = await cleanup_sandbox(sandbox_id)
         return [TextContent(
             type="text",
@@ -341,7 +232,7 @@ async def call_tool(name: str, arguments: Any) -> list[TextContent]:
 
 async def main():
     """Run the MCP server"""
-    logger.info("Starting E2B CrewAI MCP Server...")
+    logger.info("Starting E2B CrewAI MCP Server (Simple Version)...")
 
     # Check required environment variables
     required_vars = ["E2B_API_KEY", "OPENAI_API_KEY"]
