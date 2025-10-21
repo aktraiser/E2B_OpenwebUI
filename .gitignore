@@ -41,7 +41,11 @@ Thumbs.db
 # Docker
 *.log
 
+# Logs directory
+logs/*.log
+logs/*.json
+
 # Test files
 test_data.csv
 sales_data.csv
-*.tmptest_env/
+*.tmp

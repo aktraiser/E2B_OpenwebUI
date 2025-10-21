@@ -1,29 +1,25 @@
 version: '3.8'
 
 services:
-  csv-analyzer-mcpo:
+  crewai:
     build: .
-    ports:
-      - "8091:8091"
-    environment:
-      - E2B_API_KEY=${E2B_API_KEY}
-      - MCPO_PORT=8091
-    env_file:
-      - .env
+    container_name: crewai-e2b
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8091/docs"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - E2B_API_KEY=${E2B_API_KEY}
+      - MAX_CONCURRENT_SANDBOXES=${MAX_CONCURRENT_SANDBOXES:-2}
+      - MAX_SANDBOXES_PER_HOUR=${MAX_SANDBOXES_PER_HOUR:-20}
+      - CODE_EXECUTION_TIMEOUT=${CODE_EXECUTION_TIMEOUT:-30.0}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
-      - /tmp:/tmp:rw
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
+      - ./logs:/var/log/crewai
+    ports:
+      - "8000:8000"
+    mem_limit: 1g
+    cpus: 1
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

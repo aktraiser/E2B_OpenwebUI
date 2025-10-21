@@ -1,35 +1,34 @@
 FROM python:3.11-slim
 
-# Définir le répertoire de travail
 WORKDIR /app
 
-# Installer les dépendances système nécessaires
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y curl && \
+    rm -rf /var/lib/apt/lists/*
 
-# Copier le fichier requirements.txt
+# Install Python dependencies
 COPY requirements.txt .
-
-# Installer les dépendances Python
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copier le code de l'application
-COPY mcp_server.py .
-COPY sandbox/ ./sandbox/
-COPY .env* ./
+# Copy application code
+COPY *.py ./
 
-# Créer un utilisateur non-root pour la sécurité
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
-USER appuser
+# Create logs directory
+RUN mkdir -p /var/log/crewai && \
+    chmod 755 /var/log/crewai
 
-# Exposer le port
-EXPOSE 8091
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
 
-# Variables d'environnement
-ENV PYTHONUNBUFFERED=1
-ENV MCPO_PORT=8091
+# Create non-root user
+RUN useradd -m -u 1000 crewai && \
+    chown -R crewai:crewai /app /var/log/crewai
 
-# Commande pour démarrer MCPO avec le serveur MCP
-CMD ["mcpo", "--host", "0.0.0.0", "--port", "8091", "--api-key", "csv-analyzer-api-key", "--", "python", "mcp_server.py"]
+USER crewai
+
+EXPOSE 8000
+
+# Start health endpoint and main application
+CMD ["sh", "-c", "uvicorn healthcheck:app --host 0.0.0.0 --port 8000 & python main.py"]
