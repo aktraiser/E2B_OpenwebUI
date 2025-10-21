@@ -65,7 +65,7 @@ async def get_or_create_sandbox(sandbox_id: str = None) -> Sandbox:
                 "duckduckgo": {},  # No API key needed
                 "arxiv": {"storagePath": "/"},
             },
-            timeout=300  # 5 minutes (seconds, not milliseconds!)
+            timeout=600  # 10 minutes
         )
 
         logger.info(f"Sandbox created: {sbx.sandbox_id}")
@@ -94,8 +94,8 @@ export E2B_API_KEY="{os.getenv('E2B_API_KEY')}"
         # Install dependencies
         logger.info("Installing dependencies...")
         result = sbx.commands.run(
-            "bash -c 'chmod +x /root/.env_setup && source /root/.env_setup && pip install -q -r /root/requirements.txt'",
-            timeout=180000  # 3 minutes
+            "bash -c 'source /root/.env_setup && pip install -q -r /root/requirements.txt'",
+            timeout=180  # 3 minutes (seconds!)
         )
 
         if result.exit_code != 0:
@@ -157,8 +157,8 @@ print(json.dumps(output))
         # Execute the task
         logger.info(f"Executing CrewAI task in sandbox {sbx.sandbox_id}...")
         result = sbx.commands.run(
-            "bash -c 'chmod +x /root/.env_setup && source /root/.env_setup && cd /root && python task_runner.py'",
-            timeout=300000  # 5 minutes for task execution
+            "bash -c 'source /root/.env_setup && cd /root && python task_runner.py'",
+            timeout=300  # 5 minutes for task execution
         )
 
         if result.exit_code != 0:
