@@ -142,10 +142,16 @@ class SandboxMetrics:
             return
 
         try:
+            # Try to create directory if needed
+            import os
+            metrics_dir = os.path.dirname(VPSConfig.METRICS_FILE)
+            if metrics_dir and not os.path.exists(metrics_dir):
+                os.makedirs(metrics_dir, exist_ok=True)
+            
             with open(VPSConfig.METRICS_FILE, "w") as f:
                 json.dump(self.to_dict(), f, indent=2)
         except Exception as e:
-            logger.error(f"Failed to save metrics: {e}")
+            logger.debug(f"Could not save metrics to file: {e}")
 
     @classmethod
     def load_from_file(cls) -> "SandboxMetrics":
@@ -162,10 +168,10 @@ class SandboxMetrics:
                 )
                 return cls(**data)
         except FileNotFoundError:
-            logger.info("No existing metrics file, starting fresh")
+            logger.debug("No existing metrics file, starting fresh")
             return cls()
         except Exception as e:
-            logger.error(f"Failed to load metrics: {e}, starting fresh")
+            logger.debug(f"Could not load metrics: {e}, starting fresh")
             return cls()
 
 

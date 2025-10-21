@@ -3,18 +3,27 @@ Main entry point for VPS deployment.
 """
 import logging
 import sys
+import os
 from crew import CodeExecutionCrewVPS
 from sandbox_pool import get_sandbox_pool
 from config import VPSConfig
 
-# Configure logging
+# Configure logging with fallback
+handlers = [logging.StreamHandler(sys.stdout)]
+
+# Try to add file handler if possible
+try:
+    log_dir = os.path.dirname(VPSConfig.LOG_FILE)
+    if log_dir and not os.path.exists(log_dir):
+        os.makedirs(log_dir, exist_ok=True)
+    handlers.append(logging.FileHandler(VPSConfig.LOG_FILE))
+except (PermissionError, OSError) as e:
+    print(f"Warning: Could not create log file: {e}. Logging to stdout only.")
+
 logging.basicConfig(
     level=VPSConfig.LOG_LEVEL,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler(VPSConfig.LOG_FILE),
-        logging.StreamHandler(sys.stdout)
-    ]
+    handlers=handlers
 )
 
 logger = logging.getLogger(__name__)
