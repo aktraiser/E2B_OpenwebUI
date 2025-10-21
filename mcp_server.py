@@ -65,7 +65,7 @@ async def get_or_create_sandbox(sandbox_id: str = None) -> Sandbox:
                 "duckduckgo": {},  # No API key needed
                 "arxiv": {"storagePath": "/"},
             },
-            timeout=600000  # 10 minutes
+            timeout=300  # 5 minutes (seconds, not milliseconds!)
         )
 
         logger.info(f"Sandbox created: {sbx.id}")

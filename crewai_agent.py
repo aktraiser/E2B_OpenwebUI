@@ -21,7 +21,7 @@ def execute_python(code: str) -> str:
         Execution results as text
     """
     try:
-        with Sandbox.create() as sandbox:
+        with Sandbox.create(timeout=300) as sandbox:  # 5 minutes max
             execution = sandbox.run_code(code)
 
             # Handle different result types
