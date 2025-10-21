@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 @tool("Python Code Interpreter (E2B)")
-def execute_python(code: str) -> str:
+async def execute_python(code: str) -> str:
     """
     Execute Python code in a secure E2B cloud sandbox.
 
@@ -51,7 +51,8 @@ def execute_python(code: str) -> str:
     for attempt in range(VPSConfig.MAX_RETRIES):
         try:
             logger.info(f"Executing code (attempt {attempt + 1}/{VPSConfig.MAX_RETRIES})")
-            result = asyncio.run(_execute_with_pool(pool, code))
+            # Execute directly in async context
+            result = await _execute_with_pool(pool, code)
             return result
 
         except RuntimeError as e:
