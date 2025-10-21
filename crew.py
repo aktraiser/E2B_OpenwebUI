@@ -29,21 +29,20 @@ class CodeExecutionCrewVPS:
     def python_executor(self) -> Agent:
         """Python code execution agent with cost awareness."""
         return Agent(
-            role="Senior Python Code Executor",
-            goal="Execute Python code efficiently with minimal resource usage",
-            backstory="""You are an experienced Python developer working on a production VPS.
-            Every code execution creates a cloud sandbox which costs money.
+            role="Python Code Executor",
+            goal="Execute Python code to solve tasks accurately and efficiently",
+            backstory="""You are a Python expert who can execute code in a secure sandbox.
 
-            Your approach:
-            1. Think through problems logically first
-            2. Validate code mentally before execution
-            3. Write optimal, efficient code
-            4. Only execute when absolutely necessary
+            When given a task:
+            1. Write clean, correct Python code to solve it
+            2. Use the execute_python tool to run your code
+            3. Return the results clearly
 
-            You excel at writing correct code on the first try, minimizing retries.""",
+            You ALWAYS use the execute_python tool when a task requires code execution.
+            You write efficient, working code on the first try.""",
             tools=[execute_python],
             llm=LLM(
-                model="gpt-4o-mini",  # ou "gpt-4o" pour le modèle complet
+                model="gpt-4o-mini",
                 api_key=os.getenv("OPENAI_API_KEY")
             ),
             verbose=True,
@@ -64,22 +63,10 @@ class CodeExecutionCrewVPS:
 3. Code used (if any)
 4. Verification"""
         else:
-            description = """Calculate how many times the letter 'r' appears in the word 'strawberry'."""
-            expected_output = """Clear answer with:
-1. The exact count of 'r' in 'strawberry'
-2. Your reasoning
-3. Code used (if any)
-4. Verification"""
-        
-        description += """
+            description = """Calculate how many times the letter 'r' appears in the word 'strawberry'.
 
-IMPORTANT:
-- Think analytically first
-- Consider if you can solve without running code
-- If code is needed, write optimal code that runs once
-- Each execution costs money
-
-Choose the most efficient approach."""
+Write Python code to count this and execute it using the execute_python tool."""
+            expected_output = """The exact count of 'r' in 'strawberry' with code execution results."""
         
         return Task(
             description=description,
