@@ -68,7 +68,7 @@ async def get_or_create_sandbox(sandbox_id: str = None) -> Sandbox:
             timeout=300  # 5 minutes (seconds, not milliseconds!)
         )
 
-        logger.info(f"Sandbox created: {sbx.id}")
+        logger.info(f"Sandbox created: {sbx.sandbox_id}")
 
         # Upload CrewAI agent code
         logger.info("Setting up CrewAI in sandbox...")
@@ -106,9 +106,9 @@ export E2B_API_KEY="{os.getenv('E2B_API_KEY')}"
         sbx.keep_alive(1800)
 
         # Cache the sandbox
-        _sandbox_cache[sbx.id] = sbx
+        _sandbox_cache[sbx.sandbox_id] = sbx
 
-        logger.info(f"Sandbox ready: {sbx.id}")
+        logger.info(f"Sandbox ready: {sbx.sandbox_id}")
         return sbx
 
 
@@ -140,13 +140,13 @@ try:
     output = {{
         "success": True,
         "result": str(result),
-        "sandbox_id": "{sbx.id}"
+        "sandbox_id": "{sbx.sandbox_id}"
     }}
 except Exception as e:
     output = {{
         "success": False,
         "error": str(e),
-        "sandbox_id": "{sbx.id}"
+        "sandbox_id": "{sbx.sandbox_id}"
     }}
 
 print(json.dumps(output))
@@ -155,7 +155,7 @@ print(json.dumps(output))
         sbx.files.write("/root/task_runner.py", task_script)
 
         # Execute the task
-        logger.info(f"Executing CrewAI task in sandbox {sbx.id}...")
+        logger.info(f"Executing CrewAI task in sandbox {sbx.sandbox_id}...")
         result = sbx.commands.run(
             "bash -c 'source /root/.env_setup && cd /root && python task_runner.py'",
             timeout=300000  # 5 minutes for task execution
@@ -166,13 +166,13 @@ print(json.dumps(output))
             return {
                 "success": False,
                 "error": f"Execution failed: {result.stderr}",
-                "sandbox_id": sbx.id
+                "sandbox_id": sbx.sandbox_id
             }
 
         # Parse the JSON output
         try:
             output = json.loads(result.stdout.strip())
-            logger.info(f"Task completed successfully in sandbox {sbx.id}")
+            logger.info(f"Task completed successfully in sandbox {sbx.sandbox_id}")
             return output
         except json.JSONDecodeError:
             logger.error(f"Failed to parse output: {result.stdout}")
@@ -180,7 +180,7 @@ print(json.dumps(output))
                 "success": False,
                 "error": "Failed to parse task output",
                 "raw_output": result.stdout,
-                "sandbox_id": sbx.id
+                "sandbox_id": sbx.sandbox_id
             }
 
     except Exception as e:
