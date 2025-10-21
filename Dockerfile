@@ -10,16 +10,19 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-RUN pip install --no-cache-dir mcpo uv
-
-# Copy MCP server code
+# Copy files first
 COPY mcp_server.py .
 COPY crewai_agent.py .
+COPY api_server.py .
 COPY requirements.txt .
 
-# Install additional dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install ALL dependencies in system Python
+RUN pip install --no-cache-dir \
+    fastapi>=0.104.0 \
+    uvicorn[standard]>=0.24.0 \
+    mcp>=1.0.0 \
+    e2b>=1.0.0 \
+    python-dotenv>=1.0.0
 
 # Expose port for HTTP API
 EXPOSE 8000
@@ -28,6 +31,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/docs || exit 1
 
-# Start mcpo proxy server with our MCP server
-# mcpo will expose MCP tools as REST API
-CMD ["uvx", "mcpo", "--host", "0.0.0.0", "--port", "8000", "--", "python3", "mcp_server.py"]
+# Start FastAPI server (exposes HTTP REST API for OpenWebUI)
+CMD ["python3", "api_server.py"]
