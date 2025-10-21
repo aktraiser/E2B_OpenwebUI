@@ -36,8 +36,8 @@ class CodeExecutionCrewVPS:
             You excel at writing correct code on the first try, minimizing retries.""",
             tools=[execute_python],
             llm=LLM(
-                model="claude-3-5-sonnet-20241022",
-                api_key=os.getenv("ANTHROPIC_API_KEY")
+                model="gpt-4o-mini",  # ou "gpt-4o" pour le modèle complet
+                api_key=os.getenv("OPENAI_API_KEY")
             ),
             verbose=True,
             allow_delegation=False,

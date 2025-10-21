@@ -11,11 +11,11 @@ VPS_IP="${VPS_IP:-YOUR_VPS_IP}"
 VPS_PATH="${VPS_PATH:-/root/E2B_OpenwebUI}"
 
 # Vérifier que les clés sont définies dans l'environnement
-if [ -z "$ANTHROPIC_API_KEY" ] || [ -z "$E2B_API_KEY" ]; then
+if [ -z "$OPENAI_API_KEY" ] || [ -z "$E2B_API_KEY" ]; then
     echo "❌ Erreur: Les clés API doivent être définies dans l'environnement"
     echo ""
     echo "Utilisation:"
-    echo "  export ANTHROPIC_API_KEY='sk-ant-api03-...'"
+    echo "  export OPENAI_API_KEY='sk-...'"
     echo "  export E2B_API_KEY='e2b_...'"
     echo "  ./vps_deploy.sh"
     echo ""
@@ -27,7 +27,7 @@ fi
 # Créer le fichier .env temporaire SANS les clés en dur
 cat > /tmp/temp.env << EOF
 # API Keys (depuis variables d'environnement)
-ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+OPENAI_API_KEY=${OPENAI_API_KEY}
 E2B_API_KEY=${E2B_API_KEY}
 
 # Resource Limits

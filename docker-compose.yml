@@ -6,7 +6,7 @@ services:
     container_name: crewai-e2b
     restart: unless-stopped
     environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - E2B_API_KEY=${E2B_API_KEY}
       - MAX_CONCURRENT_SANDBOXES=${MAX_CONCURRENT_SANDBOXES:-2}
       - MAX_SANDBOXES_PER_HOUR=${MAX_SANDBOXES_PER_HOUR:-20}
