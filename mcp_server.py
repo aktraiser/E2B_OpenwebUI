@@ -38,16 +38,84 @@ def execute_python(code: str) -> str:
         return f"Execution error: {str(e)}"
 
 
+@tool("Web Crawler")
+def crawl_website(url: str, extract_question: str = None) -> str:
+    """
+    Crawl a website and extract clean markdown content using Crawl4AI.
+    
+    Args:
+        url: The website URL to crawl
+        extract_question: Optional question to guide LLM extraction
+    
+    Returns:
+        Clean markdown content from the website
+    """
+    try:
+        with Sandbox.create() as sandbox:
+            # Install crawl4ai if not present and crawl the website
+            crawl_code = f"""
+import subprocess
+import sys
+
+# Install crawl4ai
+try:
+    import crawl4ai
+except ImportError:
+    subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-U', 'crawl4ai'])
+    import crawl4ai
+
+import asyncio
+from crawl4ai import AsyncWebCrawler
+
+async def crawl_site():
+    async with AsyncWebCrawler() as crawler:
+        result = await crawler.arun(
+            url="{url}",
+            word_count_threshold=10,
+            exclude_external_links=True,
+            exclude_social_media_links=True,
+        )
+        
+        if result.success:
+            # Return markdown content
+            markdown = result.markdown
+            if len(markdown) > 5000:  # Limit output size
+                markdown = markdown[:5000] + "\\n\\n[Content truncated...]"
+            
+            print("=== CRAWL RESULTS ===")
+            print(f"URL: {url}")
+            print(f"Title: {{result.metadata.get('title', 'N/A')}}")
+            print(f"Word Count: {{len(markdown.split())}}")
+            print("\\n=== CONTENT ===")
+            print(markdown)
+        else:
+            print(f"Failed to crawl {{url}}: {{result.error_message}}")
+
+# Run the async crawl
+asyncio.run(crawl_site())
+"""
+            
+            execution = sandbox.run_code(crawl_code)
+            
+            if execution.error:
+                return f"Crawling error: {execution.error}"
+            
+            return execution.text if execution.text else "No content extracted"
+            
+    except Exception as e:
+        return f"Web crawling error: {str(e)}"
+
+
 def create_crew(task_description: str):
     """
     Create a CrewAI crew with E2B tools
     """
     # Define the agent
     python_executor = Agent(
-        role='Python Executor and Researcher',
-        goal='Execute Python code and solve complex tasks',
-        backstory='You are an expert Python programmer and researcher capable of executing code and solving problems.',
-        tools=[execute_python],
+        role='Python Executor and Web Researcher',
+        goal='Execute Python code, crawl websites, and solve complex data tasks',
+        backstory='You are an expert Python programmer and web researcher with access to advanced crawling tools. You can execute code safely and extract structured data from websites.',
+        tools=[execute_python, crawl_website],
         llm=LLM(
             model="gpt-4o",
             api_key=os.getenv("OPENAI_API_KEY")
@@ -133,20 +201,23 @@ async def list_tools() -> list[Tool]:
     return [
         Tool(
             name="execute_crewai_task",
-            description="""Execute a task using CrewAI agent with E2B Code Interpreter.
+            description="""Execute a task using CrewAI agent with E2B Code Interpreter and Crawl4AI web crawling.
 
 The CrewAI agent can:
 - Execute Python code in secure E2B sandboxes
+- Crawl websites and extract clean markdown content
 - Perform calculations and data analysis
-- Solve complex programming problems
+- Solve complex programming and research problems
 
 Examples:
 - "Calculate 2 + 2 using Python"
 - "Analyze CSV data and create a summary"
-- "Calculate the fibonacci sequence up to n=20"
-- "Count how many r's are in the word 'strawberry'"
+- "Crawl https://example.com and extract the main content"
+- "Scrape news from a website and analyze sentiment"
+- "Extract product information from an e-commerce page"
+- "Combine web data with calculations for insights"
 
-The agent will use Python code execution to complete tasks.""",
+The agent will intelligently choose between Python execution and web crawling based on the task.""",
             inputSchema={
                 "type": "object",
                 "properties": {
