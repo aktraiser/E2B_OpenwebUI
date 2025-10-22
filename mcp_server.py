@@ -41,7 +41,7 @@ def execute_python(code: str) -> str:
 @tool("Web Crawler")
 def crawl_website(url: str) -> str:
     """
-    Advanced web crawler that extracts clean markdown content from websites.
+    Advanced web crawler that extracts clean markdown content from websites using modern Crawl4AI.
     
     Args:
         url: The website URL to crawl
@@ -58,7 +58,7 @@ import json
 
 # Install and setup crawl4ai
 try:
-    from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
+    from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
     print("✅ Crawl4AI already available")
 except ImportError:
     print("📦 Installing Crawl4AI...")
@@ -67,7 +67,7 @@ except ImportError:
     subprocess.check_call(['crawl4ai-setup'])
     print("🎭 Installing Playwright browsers...")
     subprocess.check_call(['playwright', 'install'])
-    from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
+    from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
     print("✅ Crawl4AI setup complete")
 
 import asyncio
@@ -75,171 +75,170 @@ import asyncio
 async def crawl_site():
     url = "{url}"
     
-    print("=== CRAWL4AI DEBUG START ===")
+    print("=== MODERN CRAWL4AI STARTING ===")
     print(f"Target URL: {{url}}")
     
-    # First: Test basic connectivity
+    # Test basic connectivity first
     try:
         import requests
         response = requests.get(url, timeout=10)
-        print(f"✅ Basic requests test: {{response.status_code}}")
-        print(f"✅ Content length: {{len(response.text)}}")
-        if len(response.text) > 0:
-            print(f"✅ Content preview: {{response.text[:200]}}...")
+        print(f"✅ Basic connectivity: {{response.status_code}} ({{len(response.text)}} chars)")
     except Exception as e:
-        print(f"❌ Basic requests failed: {{e}}")
+        print(f"❌ Basic connectivity failed: {{e}}")
     
-    # Modern Crawl4AI configuration with proper browser and crawler configs
-    # Import all required classes first
-    from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
-    
-    try:
-        from crawl4ai import BrowserConfig
-        print("✅ BrowserConfig imported successfully")
-        browser_config = BrowserConfig(
-            headless=True,
-            user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-        )
-        print(f"✅ BrowserConfig created: {{browser_config}}")
-    except Exception as e:
-        print(f"❌ BrowserConfig import failed: {{e}}")
-        browser_config = None
-        print("✅ Will use AsyncWebCrawler without BrowserConfig")
-    
-    crawler_config = CrawlerRunConfig(
-        wait_until="domcontentloaded",
-        page_timeout=60000,  # 60 seconds timeout
-        wait_for="css:body",  # Proper CSS selector syntax
-        word_count_threshold=5,
-        exclude_external_links=True,
-        exclude_social_media_links=True
+    # Modern Crawl4AI configuration following documentation examples
+    browser_config = BrowserConfig(
+        headless=True,
+        verbose=True,
+        user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     )
-    print(f"✅ CrawlerRunConfig created: {{crawler_config}}")
     
-    print("\\n=== STARTING CRAWL4AI ===")
-    print(f"Browser config: {{browser_config is not None}}")
-    print(f"Crawler config: {{crawler_config}}")
+    run_config = CrawlerRunConfig(
+        cache_mode=CacheMode.BYPASS,
+        word_count_threshold=10,
+        page_timeout=30000,
+        wait_until="domcontentloaded"
+    )
+    
+    print(f"✅ Modern configs created - Browser: {{browser_config.headless}}, Cache: {{run_config.cache_mode}}")
     
     try:
-        if browser_config:
-            async with AsyncWebCrawler(config=browser_config) as crawler:
-                print("✅ AsyncWebCrawler created with BrowserConfig")
-                result = await crawler.arun(url=url, config=crawler_config)
-        else:
-            async with AsyncWebCrawler() as crawler:
-                print("✅ AsyncWebCrawler created without BrowserConfig")
-                result = await crawler.arun(url=url, config=crawler_config)
-        
-        print(f"\\n=== CRAWL4AI RESULT DEBUG ===")
-        print(f"Success: {{result.success}}")
-        print(f"Status code: {{getattr(result, 'status_code', 'N/A')}}")
-        print(f"Error message: {{getattr(result, 'error_message', 'N/A')}}")
-        print(f"Markdown length: {{len(result.markdown) if result.markdown else 0}}")
-        print(f"Cleaned HTML length: {{len(result.cleaned_html) if result.cleaned_html else 0}}")
-        print(f"Raw HTML length: {{len(result.html) if result.html else 0}}")
-        print(f"Metadata: {{result.metadata}}")
-        
-        if result.success:
-            markdown = result.markdown or result.cleaned_html or result.html or "No content in any format"
+        async with AsyncWebCrawler(config=browser_config) as crawler:
+            print("✅ AsyncWebCrawler initialized")
             
-            if markdown and len(markdown.strip()) > 0:
-                # Smart content truncation
-                if len(markdown) > 8000:
-                    # Try to cut at a logical point (paragraph break)
-                    truncate_at = markdown.find('\\n\\n', 7000)
-                    if truncate_at > 0:
-                        markdown = markdown[:truncate_at] + "\\n\\n[Content truncated at paragraph break...]"
-                    else:
-                        markdown = markdown[:8000] + "\\n\\n[Content truncated...]"
-                
-                print("\\n=== SUCCESSFUL CRAWL RESULTS ===")
-                print(f"URL: {{url}}")
-                print(f"Title: {{result.metadata.get('title', 'N/A')}}")
-                print(f"Description: {{result.metadata.get('description', 'N/A')[:100]}}...")
-                print(f"Word Count: {{len(markdown.split())}}")
-                print("\\n=== CONTENT ===")
-                print(markdown)
-            else:
-                print("❌ SUCCESS=True but no content found in markdown/cleaned_html/html")
-                print(f"Available attributes: {{dir(result)}}")
-                # Try to extract with basic selectors
-                if result.html:
-                    print("\\n=== TRYING BASIC HTML PARSING ===")
-                    from bs4 import BeautifulSoup
-                    soup = BeautifulSoup(result.html, 'html.parser')
-                    titles = soup.select('.titleline > a')
-                    print(f"Found {{len(titles)}} .titleline > a elements")
-                    for i, title in enumerate(titles[:5]):
-                        print(f"{{i+1}}. {{title.get_text()}} -> {{title.get('href', 'no href')}}")
-        else:
-            print(f"❌ CRAWL FAILED")
-            print(f"Error: {{result.error_message}}")
-            print(f"Status: {{getattr(result, 'status_code', 'N/A')}}")
-            
-            # Fallback with simpler config
-            print("\\n=== FALLBACK TO SIMPLE CRAWL ===")
-            simple_config = CrawlerRunConfig(
-                wait_until="domcontentloaded",
-                page_timeout=30000,
-                word_count_threshold=1
+            result = await crawler.arun(
+                url=url,
+                config=run_config
             )
-            if browser_config:
-                async with AsyncWebCrawler(config=browser_config) as fallback_crawler:
-                    basic_result = await fallback_crawler.arun(url=url, config=simple_config)
-            else:
-                async with AsyncWebCrawler() as fallback_crawler:
-                    basic_result = await fallback_crawler.arun(url=url, config=simple_config)
             
-            if basic_result.success:
-                content = basic_result.markdown[:5000] if basic_result.markdown else "No content"
-                print(f"Basic content extracted: {{len(content)}} characters")
-                print(content)
-            else:
-                print(f"Both enhanced and basic crawling failed: {{basic_result.error_message}}")
+            print("\\n=== CRAWL RESULTS ===")
+            print(f"Success: {{result.success}}")
+            print(f"Status code: {{getattr(result, 'status_code', 'N/A')}}")
+            print(f"Error: {{getattr(result, 'error_message', 'None')}}")
+            
+            if result.success:
+                # Check different content types in modern API
+                content = None
+                content_type = "none"
+                
+                if hasattr(result, 'markdown') and result.markdown:
+                    if hasattr(result.markdown, 'raw_markdown'):
+                        content = result.markdown.raw_markdown
+                        content_type = "raw_markdown"
+                    elif hasattr(result.markdown, 'fit_markdown'):
+                        content = result.markdown.fit_markdown  
+                        content_type = "fit_markdown"
+                    else:
+                        content = str(result.markdown)
+                        content_type = "markdown_string"
+                elif hasattr(result, 'cleaned_html') and result.cleaned_html:
+                    content = result.cleaned_html
+                    content_type = "cleaned_html"
+                elif hasattr(result, 'html') and result.html:
+                    content = result.html[:5000]  # Truncate raw HTML
+                    content_type = "raw_html"
+                
+                print(f"Content type: {{content_type}}")
+                print(f"Content length: {{len(content) if content else 0}}")
+                
+                if content and len(content.strip()) > 50:
+                    # Smart truncation for readability
+                    if len(content) > 8000:
+                        truncate_at = content.find('\\n\\n', 7000)
+                        if truncate_at > 0:
+                            content = content[:truncate_at] + "\\n\\n[Content truncated...]"
+                        else:
+                            content = content[:8000] + "\\n[Content truncated...]"
                     
+                    print("\\n=== EXTRACTED CONTENT ===")
+                    print(f"URL: {{url}}")
+                    print(f"Words: {{len(content.split())}}")
+                    print("\\n" + content)
+                    return content
+                else:
+                    print("❌ No meaningful content extracted")
+                    
+                    # Try fallback extraction for news sites
+                    if hasattr(result, 'html') and result.html:
+                        print("\\n=== FALLBACK: Basic HTML parsing ===")
+                        try:
+                            from bs4 import BeautifulSoup
+                            soup = BeautifulSoup(result.html, 'html.parser')
+                            
+                            # Common news site selectors
+                            headlines = []
+                            selectors = [
+                                '.titleline a',  # Hacker News
+                                'h1, h2, h3',    # Generic headlines
+                                '.title',        # Common title class
+                                'article h1, article h2'  # Article headlines
+                            ]
+                            
+                            for selector in selectors:
+                                elements = soup.select(selector)
+                                if elements:
+                                    for elem in elements[:10]:
+                                        text = elem.get_text().strip()
+                                        if len(text) > 10:
+                                            headlines.append(text)
+                            
+                            if headlines:
+                                fallback_content = "\\n".join(f"• {{headline}}" for headline in headlines[:15])
+                                print(f"Extracted {{len(headlines)}} headlines via fallback")
+                                print(fallback_content)
+                                return f"Headlines extracted from {{url}}:\\n\\n{{fallback_content}}"
+                            else:
+                                print("No headlines found with fallback selectors")
+                        except Exception as parse_error:
+                            print(f"Fallback parsing failed: {{parse_error}}")
+            else:
+                print(f"❌ Crawl failed: {{result.error_message}}")
+                
+                # Try simple fallback config
+                print("\\n=== SIMPLE FALLBACK ===")
+                simple_config = CrawlerRunConfig(
+                    cache_mode=CacheMode.BYPASS,
+                    word_count_threshold=1,
+                    page_timeout=15000
+                )
+                
+                fallback_result = await crawler.arun(url=url, config=simple_config)
+                if fallback_result.success:
+                    fallback_content = None
+                    if hasattr(fallback_result, 'markdown') and fallback_result.markdown:
+                        if hasattr(fallback_result.markdown, 'raw_markdown'):
+                            fallback_content = fallback_result.markdown.raw_markdown[:3000]
+                        else:
+                            fallback_content = str(fallback_result.markdown)[:3000]
+                    
+                    if fallback_content:
+                        print(f"Fallback extracted {{len(fallback_content)}} characters")
+                        return fallback_content
+                
+                return f"Failed to crawl {{url}}: {{result.error_message}}"
+                
     except Exception as e:
-        print(f"Crawling error: {{e}}")
-        # Final fallback with minimal config
-        try:
-            minimal_config = CrawlerRunConfig(page_timeout=15000)
-            if browser_config:
-                try:
-                    minimal_browser = BrowserConfig(headless=True)
-                    async with AsyncWebCrawler(config=minimal_browser) as crawler:
-                        simple_result = await crawler.arun(url=url, config=minimal_config)
-                except:
-                    async with AsyncWebCrawler() as crawler:
-                        simple_result = await crawler.arun(url=url, config=minimal_config)
-            else:
-                async with AsyncWebCrawler() as crawler:
-                    simple_result = await crawler.arun(url=url, config=minimal_config)
-            
-            if simple_result.success:
-                print("=== MINIMAL FALLBACK CONTENT ===")
-                print(simple_result.markdown[:3000] if simple_result.markdown else "No markdown content")
-            else:
-                print(f"All crawling methods failed: {{simple_result.error_message}}")
-        except Exception as fallback_error:
-            print(f"Complete crawling failure: {{fallback_error}}")
+        print(f"Crawling exception: {{e}}")
+        return f"Crawling error: {{str(e)}}"
 
-# Run the async crawl with proper event loop handling
+# Execute with proper async handling
 try:
-    loop = asyncio.get_event_loop()
-    if loop.is_running():
-        # If already in a running loop, create a task
+    import nest_asyncio
+    nest_asyncio.apply()
+    result = asyncio.run(crawl_site())
+    print("=== FINAL RESULT ===")
+    print(result if result else "No content returned")
+except Exception as e:
+    print(f"Async execution error: {{e}}")
+    try:
         import concurrent.futures
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future = executor.submit(asyncio.run, crawl_site())
-            future.result()
-    else:
-        # If no loop is running, use asyncio.run
-        asyncio.run(crawl_site())
-except RuntimeError:
-    # Fallback if event loop issues persist
-    import concurrent.futures
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        future = executor.submit(asyncio.run, crawl_site())
-        future.result()
+            result = future.result(timeout=60)
+            print("=== FINAL RESULT (via ThreadPool) ===") 
+            print(result if result else "No content returned")
+    except Exception as final_error:
+        print(f"All execution methods failed: {{final_error}}")
 """
             
             execution = sandbox.run_code(crawl_code)
