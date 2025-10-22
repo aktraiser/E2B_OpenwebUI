@@ -75,13 +75,34 @@ import asyncio
 async def crawl_site():
     url = "{url}"
     
-    # Modern Crawl4AI configuration with proper browser and crawler configs
-    from crawl4ai import BrowserConfig
+    print("=== CRAWL4AI DEBUG START ===")
+    print(f"Target URL: {{url}}")
     
-    browser_config = BrowserConfig(
-        headless=True,
-        user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-    )
+    # First: Test basic connectivity
+    try:
+        import requests
+        response = requests.get(url, timeout=10)
+        print(f"✅ Basic requests test: {{response.status_code}}")
+        print(f"✅ Content length: {{len(response.text)}}")
+        if len(response.text) > 0:
+            print(f"✅ Content preview: {{response.text[:200]}}...")
+    except Exception as e:
+        print(f"❌ Basic requests failed: {{e}}")
+    
+    # Modern Crawl4AI configuration with proper browser and crawler configs
+    try:
+        from crawl4ai import BrowserConfig
+        print("✅ BrowserConfig imported successfully")
+    except Exception as e:
+        print(f"❌ BrowserConfig import failed: {{e}}")
+        from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
+        browser_config = None
+    else:
+        browser_config = BrowserConfig(
+            headless=True,
+            user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+        )
+        print(f"✅ BrowserConfig created: {{browser_config}}")
     
     crawler_config = CrawlerRunConfig(
         wait_until="domcontentloaded",
@@ -91,14 +112,35 @@ async def crawl_site():
         exclude_external_links=True,
         exclude_social_media_links=True
     )
+    print(f"✅ CrawlerRunConfig created: {{crawler_config}}")
+    
+    print("\\n=== STARTING CRAWL4AI ===")
+    print(f"Browser config: {{browser_config is not None}}")
+    print(f"Crawler config: {{crawler_config}}")
     
     try:
-        async with AsyncWebCrawler(config=browser_config) as crawler:
-            result = await crawler.arun(url=url, config=crawler_config)
+        if browser_config:
+            async with AsyncWebCrawler(config=browser_config) as crawler:
+                print("✅ AsyncWebCrawler created with BrowserConfig")
+                result = await crawler.arun(url=url, config=crawler_config)
+        else:
+            async with AsyncWebCrawler() as crawler:
+                print("✅ AsyncWebCrawler created without BrowserConfig")
+                result = await crawler.arun(url=url, config=crawler_config)
+        
+        print(f"\\n=== CRAWL4AI RESULT DEBUG ===")
+        print(f"Success: {{result.success}}")
+        print(f"Status code: {{getattr(result, 'status_code', 'N/A')}}")
+        print(f"Error message: {{getattr(result, 'error_message', 'N/A')}}")
+        print(f"Markdown length: {{len(result.markdown) if result.markdown else 0}}")
+        print(f"Cleaned HTML length: {{len(result.cleaned_html) if result.cleaned_html else 0}}")
+        print(f"Raw HTML length: {{len(result.html) if result.html else 0}}")
+        print(f"Metadata: {{result.metadata}}")
+        
+        if result.success:
+            markdown = result.markdown or result.cleaned_html or result.html or "No content in any format"
             
-            if result.success:
-                markdown = result.markdown or result.cleaned_html
-                
+            if markdown and len(markdown.strip()) > 0:
                 # Smart content truncation
                 if len(markdown) > 8000:
                     # Try to cut at a logical point (paragraph break)
@@ -108,29 +150,50 @@ async def crawl_site():
                     else:
                         markdown = markdown[:8000] + "\\n\\n[Content truncated...]"
                 
-                print("=== CRAWL RESULTS ===")
+                print("\\n=== SUCCESSFUL CRAWL RESULTS ===")
                 print(f"URL: {{url}}")
                 print(f"Title: {{result.metadata.get('title', 'N/A')}}")
                 print(f"Description: {{result.metadata.get('description', 'N/A')[:100]}}...")
                 print(f"Word Count: {{len(markdown.split())}}")
                 print("\\n=== CONTENT ===")
                 print(markdown)
-                
             else:
-                # Fallback with simpler config
-                print("=== FALLBACK TO SIMPLE CRAWL ===")
-                simple_config = CrawlerRunConfig(
-                    wait_until="domcontentloaded",
-                    page_timeout=30000,
-                    word_count_threshold=1
-                )
-                basic_result = await crawler.arun(url=url, config=simple_config)
-                if basic_result.success:
-                    content = basic_result.markdown[:5000] if basic_result.markdown else "No content"
-                    print(f"Basic content extracted: {{len(content)}} characters")
-                    print(content)
-                else:
-                    print(f"Both enhanced and basic crawling failed: {{result.error_message}}")
+                print("❌ SUCCESS=True but no content found in markdown/cleaned_html/html")
+                print(f"Available attributes: {{dir(result)}}")
+                # Try to extract with basic selectors
+                if result.html:
+                    print("\\n=== TRYING BASIC HTML PARSING ===")
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(result.html, 'html.parser')
+                    titles = soup.select('.titleline > a')
+                    print(f"Found {{len(titles)}} .titleline > a elements")
+                    for i, title in enumerate(titles[:5]):
+                        print(f"{{i+1}}. {{title.get_text()}} -> {{title.get('href', 'no href')}}")
+        else:
+            print(f"❌ CRAWL FAILED")
+            print(f"Error: {{result.error_message}}")
+            print(f"Status: {{getattr(result, 'status_code', 'N/A')}}")
+            
+            # Fallback with simpler config
+            print("\\n=== FALLBACK TO SIMPLE CRAWL ===")
+            simple_config = CrawlerRunConfig(
+                wait_until="domcontentloaded",
+                page_timeout=30000,
+                word_count_threshold=1
+            )
+            if browser_config:
+                async with AsyncWebCrawler(config=browser_config) as fallback_crawler:
+                    basic_result = await fallback_crawler.arun(url=url, config=simple_config)
+            else:
+                async with AsyncWebCrawler() as fallback_crawler:
+                    basic_result = await fallback_crawler.arun(url=url, config=simple_config)
+            
+            if basic_result.success:
+                content = basic_result.markdown[:5000] if basic_result.markdown else "No content"
+                print(f"Basic content extracted: {{len(content)}} characters")
+                print(content)
+            else:
+                print(f"Both enhanced and basic crawling failed: {{basic_result.error_message}}")
                     
     except Exception as e:
         print(f"Crawling error: {{e}}")
