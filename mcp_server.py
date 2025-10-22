@@ -39,14 +39,12 @@ def execute_python(code: str) -> str:
 
 
 @tool("Web Crawler")
-def crawl_website(url: str, css_selector: str = "", wait_for: str = "") -> str:
+def crawl_website(url: str) -> str:
     """
-    Advanced web crawler with CSS selectors and wait conditions.
+    Advanced web crawler that extracts clean markdown content from websites.
     
     Args:
         url: The website URL to crawl
-        css_selector: Optional CSS selector to focus on specific content areas
-        wait_for: Optional condition to wait for (CSS selector or JS condition)
     
     Returns:
         Clean markdown content from the website
@@ -76,26 +74,15 @@ import asyncio
 
 async def crawl_site():
     url = "{url}"
-    css_selector = "{css_selector or ''}"
-    wait_for = "{wait_for or ''}"
     
-    # Build configuration dynamically
+    # Build basic configuration for robust crawling
     config_params = {{
         "word_count_threshold": 10,
         "exclude_external_links": True,
         "exclude_social_media_links": True,
-        "wait_for_timeout": 10000
+        "wait_for_timeout": 10000,
+        "wait_for": "css:body"  # Wait for page to load
     }}
-    
-    # Add CSS selector if provided
-    if css_selector:
-        config_params["css_selector"] = css_selector
-    
-    # Add wait condition if provided  
-    if wait_for:
-        config_params["wait_for"] = f"css:{{wait_for}}" if not wait_for.startswith(('css:', 'js:')) else wait_for
-    else:
-        config_params["wait_for"] = "css:body"
     
     # Add JavaScript for dynamic content
     js_code = [
@@ -126,13 +113,11 @@ async def crawl_site():
                     else:
                         markdown = markdown[:8000] + "\\n\\n[Content truncated...]"
                 
-                print("=== ENHANCED CRAWL RESULTS ===")
+                print("=== CRAWL RESULTS ===")
                 print(f"URL: {{url}}")
                 print(f"Title: {{result.metadata.get('title', 'N/A')}}")
                 print(f"Description: {{result.metadata.get('description', 'N/A')[:100]}}...")
                 print(f"Word Count: {{len(markdown.split())}}")
-                print(f"CSS Selector: {{css_selector or 'Full page'}}")
-                print(f"Wait Condition: {{wait_for or 'Default (body)'}}")
                 print("\\n=== CONTENT ===")
                 print(markdown)
                 
