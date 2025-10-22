@@ -39,57 +39,118 @@ def execute_python(code: str) -> str:
 
 
 @tool("Web Crawler")
-def crawl_website(url: str, extract_question: str = None) -> str:
+def crawl_website(url: str, css_selector: str = None, wait_for: str = None) -> str:
     """
-    Crawl a website and extract clean markdown content using Crawl4AI.
+    Advanced web crawler with CSS selectors and wait conditions.
     
     Args:
         url: The website URL to crawl
-        extract_question: Optional question to guide LLM extraction
+        css_selector: Optional CSS selector to focus on specific content areas
+        wait_for: Optional condition to wait for (CSS selector or JS condition)
     
     Returns:
         Clean markdown content from the website
     """
     try:
         with Sandbox.create() as sandbox:
-            # Install crawl4ai if not present and crawl the website
             crawl_code = f"""
 import subprocess
 import sys
+import json
 
 # Install crawl4ai
 try:
-    import crawl4ai
+    from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 except ImportError:
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-U', 'crawl4ai'])
-    import crawl4ai
+    from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
 
 import asyncio
-from crawl4ai import AsyncWebCrawler
 
 async def crawl_site():
-    async with AsyncWebCrawler() as crawler:
-        result = await crawler.arun(
-            url="{url}",
-            word_count_threshold=10,
-            exclude_external_links=True,
-            exclude_social_media_links=True,
-        )
-        
-        if result.success:
-            # Return markdown content
-            markdown = result.markdown
-            if len(markdown) > 5000:  # Limit output size
-                markdown = markdown[:5000] + "\\n\\n[Content truncated...]"
+    url = "{url}"
+    css_selector = "{css_selector or ''}"
+    wait_for = "{wait_for or ''}"
+    
+    # Build configuration dynamically
+    config_params = {{
+        "word_count_threshold": 10,
+        "exclude_external_links": True,
+        "exclude_social_media_links": True,
+        "wait_for_timeout": 10000
+    }}
+    
+    # Add CSS selector if provided
+    if css_selector:
+        config_params["css_selector"] = css_selector
+    
+    # Add wait condition if provided  
+    if wait_for:
+        config_params["wait_for"] = f"css:{{wait_for}}" if not wait_for.startswith(('css:', 'js:')) else wait_for
+    else:
+        config_params["wait_for"] = "css:body"
+    
+    # Add JavaScript for dynamic content
+    js_code = [
+        # Scroll to load lazy content
+        "window.scrollTo(0, document.body.scrollHeight/2);",
+        "await new Promise(resolve => setTimeout(resolve, 1000));",
+        # Click load more buttons if they exist
+        "const loadMore = document.querySelector('button:contains(\"Load More\"), button:contains(\"Show More\"), .load-more, .show-more'); if(loadMore && loadMore.offsetParent !== null) loadMore.click();",
+        "await new Promise(resolve => setTimeout(resolve, 2000));"
+    ]
+    
+    config_params["js_code"] = js_code
+    
+    try:
+        async with AsyncWebCrawler() as crawler:
+            config = CrawlerRunConfig(**config_params)
+            result = await crawler.arun(url=url, config=config)
             
-            print("=== CRAWL RESULTS ===")
-            print(f"URL: {url}")
-            print(f"Title: {{result.metadata.get('title', 'N/A')}}")
-            print(f"Word Count: {{len(markdown.split())}}")
-            print("\\n=== CONTENT ===")
-            print(markdown)
-        else:
-            print(f"Failed to crawl {{url}}: {{result.error_message}}")
+            if result.success:
+                markdown = result.markdown or result.cleaned_html
+                
+                # Smart content truncation
+                if len(markdown) > 8000:
+                    # Try to cut at a logical point (paragraph break)
+                    truncate_at = markdown.find('\\n\\n', 7000)
+                    if truncate_at > 0:
+                        markdown = markdown[:truncate_at] + "\\n\\n[Content truncated at paragraph break...]"
+                    else:
+                        markdown = markdown[:8000] + "\\n\\n[Content truncated...]"
+                
+                print("=== ENHANCED CRAWL RESULTS ===")
+                print(f"URL: {{url}}")
+                print(f"Title: {{result.metadata.get('title', 'N/A')}}")
+                print(f"Description: {{result.metadata.get('description', 'N/A')[:100]}}...")
+                print(f"Word Count: {{len(markdown.split())}}")
+                print(f"CSS Selector: {{css_selector or 'Full page'}}")
+                print(f"Wait Condition: {{wait_for or 'Default (body)'}}")
+                print("\\n=== CONTENT ===")
+                print(markdown)
+                
+            else:
+                # Fallback to basic crawling
+                print("=== FALLBACK TO BASIC CRAWL ===")
+                basic_result = await crawler.arun(url=url)
+                if basic_result.success:
+                    content = basic_result.markdown[:5000] if basic_result.markdown else "No content"
+                    print(f"Basic content extracted: {{len(content)}} characters")
+                    print(content)
+                else:
+                    print(f"Both enhanced and basic crawling failed: {{result.error_message}}")
+                    
+    except Exception as e:
+        print(f"Crawling error: {{e}}")
+        # Final fallback
+        try:
+            async with AsyncWebCrawler() as crawler:
+                simple_result = await crawler.arun(url=url)
+                if simple_result.success:
+                    print("=== SIMPLE FALLBACK CONTENT ===")
+                    print(simple_result.markdown[:3000] if simple_result.markdown else "No markdown content")
+        except:
+            print("All crawling methods failed")
 
 # Run the async crawl
 asyncio.run(crawl_site())
@@ -112,9 +173,18 @@ def create_crew(task_description: str):
     """
     # Define the agent
     python_executor = Agent(
-        role='Python Executor and Web Researcher',
-        goal='Execute Python code, crawl websites, and solve complex data tasks',
-        backstory='You are an expert Python programmer and web researcher with access to advanced crawling tools. You can execute code safely and extract structured data from websites.',
+        role='Python Executor and Advanced Web Researcher',
+        goal='Execute Python code, intelligently crawl websites with advanced techniques, and solve complex data analysis tasks',
+        backstory='''You are an expert Python programmer and web researcher with access to state-of-the-art crawling tools. 
+        
+You can:
+- Execute Python code safely in isolated sandboxes
+- Crawl any website with advanced techniques (CSS selectors, wait conditions, JavaScript handling)
+- Handle dynamic content, lazy loading, and complex web structures
+- Extract structured data from any type of website
+- Combine web data with Python analysis for insights
+        
+You intelligently choose the right approach for each task and always provide clean, actionable results.''',
         tools=[execute_python, crawl_website],
         llm=LLM(
             model="gpt-4o",
@@ -201,23 +271,32 @@ async def list_tools() -> list[Tool]:
     return [
         Tool(
             name="execute_crewai_task",
-            description="""Execute a task using CrewAI agent with E2B Code Interpreter and Crawl4AI web crawling.
+            description="""Execute a task using CrewAI agent with advanced E2B Code Interpreter and intelligent Crawl4AI web crawling.
 
-The CrewAI agent can:
-- Execute Python code in secure E2B sandboxes
-- Crawl websites and extract clean markdown content
-- Perform calculations and data analysis
-- Solve complex programming and research problems
+The CrewAI agent features:
+- Secure Python code execution in E2B sandboxes
+- Advanced web crawling with CSS selectors and dynamic content handling
+- Smart content extraction with fallback mechanisms
+- JavaScript execution for dynamic websites
+- Intelligent data analysis and processing
+
+Capabilities:
+- Mathematical calculations and data analysis
+- Website crawling with advanced targeting (CSS selectors, wait conditions)
+- Dynamic content handling (lazy loading, AJAX, JavaScript-rendered content)
+- Structured data extraction from any website type
+- Combined web scraping + data analysis workflows
+- Robust error handling with multiple fallback strategies
 
 Examples:
-- "Calculate 2 + 2 using Python"
-- "Analyze CSV data and create a summary"
-- "Crawl https://example.com and extract the main content"
-- "Scrape news from a website and analyze sentiment"
-- "Extract product information from an e-commerce page"
-- "Combine web data with calculations for insights"
+- "Calculate compound interest for a $10000 investment"
+- "Crawl a news website and extract headlines with sentiment analysis"
+- "Scrape product data from any e-commerce site and analyze pricing trends"
+- "Extract social media posts and calculate engagement metrics"
+- "Combine multiple website data sources for comprehensive analysis"
+- "Handle complex websites with dynamic loading and extract specific content"
 
-The agent will intelligently choose between Python execution and web crawling based on the task.""",
+The agent intelligently selects the optimal approach for each task.""",
             inputSchema={
                 "type": "object",
                 "properties": {
