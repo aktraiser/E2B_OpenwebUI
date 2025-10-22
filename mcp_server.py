@@ -90,19 +90,21 @@ async def crawl_site():
         print(f"❌ Basic requests failed: {{e}}")
     
     # Modern Crawl4AI configuration with proper browser and crawler configs
+    # Import all required classes first
+    from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
+    
     try:
         from crawl4ai import BrowserConfig
         print("✅ BrowserConfig imported successfully")
-    except Exception as e:
-        print(f"❌ BrowserConfig import failed: {{e}}")
-        from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
-        browser_config = None
-    else:
         browser_config = BrowserConfig(
             headless=True,
             user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
         )
         print(f"✅ BrowserConfig created: {{browser_config}}")
+    except Exception as e:
+        print(f"❌ BrowserConfig import failed: {{e}}")
+        browser_config = None
+        print("✅ Will use AsyncWebCrawler without BrowserConfig")
     
     crawler_config = CrawlerRunConfig(
         wait_until="domcontentloaded",
@@ -199,15 +201,24 @@ async def crawl_site():
         print(f"Crawling error: {{e}}")
         # Final fallback with minimal config
         try:
-            minimal_browser = BrowserConfig(headless=True)
             minimal_config = CrawlerRunConfig(page_timeout=15000)
-            async with AsyncWebCrawler(config=minimal_browser) as crawler:
-                simple_result = await crawler.arun(url=url, config=minimal_config)
-                if simple_result.success:
-                    print("=== MINIMAL FALLBACK CONTENT ===")
-                    print(simple_result.markdown[:3000] if simple_result.markdown else "No markdown content")
-                else:
-                    print(f"All crawling methods failed: {{simple_result.error_message}}")
+            if browser_config:
+                try:
+                    minimal_browser = BrowserConfig(headless=True)
+                    async with AsyncWebCrawler(config=minimal_browser) as crawler:
+                        simple_result = await crawler.arun(url=url, config=minimal_config)
+                except:
+                    async with AsyncWebCrawler() as crawler:
+                        simple_result = await crawler.arun(url=url, config=minimal_config)
+            else:
+                async with AsyncWebCrawler() as crawler:
+                    simple_result = await crawler.arun(url=url, config=minimal_config)
+            
+            if simple_result.success:
+                print("=== MINIMAL FALLBACK CONTENT ===")
+                print(simple_result.markdown[:3000] if simple_result.markdown else "No markdown content")
+            else:
+                print(f"All crawling methods failed: {{simple_result.error_message}}")
         except Exception as fallback_error:
             print(f"Complete crawling failure: {{fallback_error}}")
 
