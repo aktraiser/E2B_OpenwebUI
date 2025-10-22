@@ -39,7 +39,7 @@ def execute_python(code: str) -> str:
 
 
 @tool("Web Crawler")
-def crawl_website(url: str, css_selector: str = None, wait_for: str = None) -> str:
+def crawl_website(url: str, css_selector: str = "", wait_for: str = "") -> str:
     """
     Advanced web crawler with CSS selectors and wait conditions.
     
@@ -152,8 +152,24 @@ async def crawl_site():
         except:
             print("All crawling methods failed")
 
-# Run the async crawl
-asyncio.run(crawl_site())
+# Run the async crawl with proper event loop handling
+try:
+    loop = asyncio.get_event_loop()
+    if loop.is_running():
+        # If already in a running loop, create a task
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(asyncio.run, crawl_site())
+            future.result()
+    else:
+        # If no loop is running, use asyncio.run
+        asyncio.run(crawl_site())
+except RuntimeError:
+    # Fallback if event loop issues persist
+    import concurrent.futures
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        future = executor.submit(asyncio.run, crawl_site())
+        future.result()
 """
             
             execution = sandbox.run_code(crawl_code)
