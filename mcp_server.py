@@ -58,12 +58,19 @@ import subprocess
 import sys
 import json
 
-# Install crawl4ai
+# Install and setup crawl4ai
 try:
     from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
+    print("✅ Crawl4AI already available")
 except ImportError:
+    print("📦 Installing Crawl4AI...")
     subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-U', 'crawl4ai'])
+    print("🔧 Setting up Crawl4AI (this may take a few minutes)...")
+    subprocess.check_call(['crawl4ai-setup'])
+    print("🎭 Installing Playwright browsers...")
+    subprocess.check_call(['playwright', 'install'])
     from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
+    print("✅ Crawl4AI setup complete")
 
 import asyncio
 
