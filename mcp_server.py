@@ -75,31 +75,26 @@ import asyncio
 async def crawl_site():
     url = "{url}"
     
-    # Build basic configuration for robust crawling
-    config_params = {{
-        "word_count_threshold": 10,
-        "exclude_external_links": True,
-        "exclude_social_media_links": True,
-        "wait_for_timeout": 10000,
-        "wait_for": "css:body"  # Wait for page to load
-    }}
+    # Modern Crawl4AI configuration with proper browser and crawler configs
+    from crawl4ai import BrowserConfig
     
-    # Add JavaScript for dynamic content
-    js_code = [
-        # Scroll to load lazy content
-        "window.scrollTo(0, document.body.scrollHeight/2);",
-        "await new Promise(resolve => setTimeout(resolve, 1000));",
-        # Click load more buttons if they exist (fix :contains syntax)
-        "const loadMore = document.querySelector('.load-more, .show-more') || Array.from(document.querySelectorAll('button')).find(btn => btn.textContent.includes('Load More') || btn.textContent.includes('Show More')); if(loadMore && loadMore.offsetParent !== null) loadMore.click();",
-        "await new Promise(resolve => setTimeout(resolve, 2000));"
-    ]
+    browser_config = BrowserConfig(
+        headless=True,
+        user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+    )
     
-    config_params["js_code"] = js_code
+    crawler_config = CrawlerRunConfig(
+        wait_until="domcontentloaded",
+        page_timeout=60000,  # 60 seconds timeout
+        wait_for="css:body",  # Proper CSS selector syntax
+        word_count_threshold=5,
+        exclude_external_links=True,
+        exclude_social_media_links=True
+    )
     
     try:
-        async with AsyncWebCrawler() as crawler:
-            config = CrawlerRunConfig(**config_params)
-            result = await crawler.arun(url=url, config=config)
+        async with AsyncWebCrawler(config=browser_config) as crawler:
+            result = await crawler.arun(url=url, config=crawler_config)
             
             if result.success:
                 markdown = result.markdown or result.cleaned_html
@@ -122,9 +117,14 @@ async def crawl_site():
                 print(markdown)
                 
             else:
-                # Fallback to basic crawling
-                print("=== FALLBACK TO BASIC CRAWL ===")
-                basic_result = await crawler.arun(url=url)
+                # Fallback with simpler config
+                print("=== FALLBACK TO SIMPLE CRAWL ===")
+                simple_config = CrawlerRunConfig(
+                    wait_until="domcontentloaded",
+                    page_timeout=30000,
+                    word_count_threshold=1
+                )
+                basic_result = await crawler.arun(url=url, config=simple_config)
                 if basic_result.success:
                     content = basic_result.markdown[:5000] if basic_result.markdown else "No content"
                     print(f"Basic content extracted: {{len(content)}} characters")
@@ -134,15 +134,19 @@ async def crawl_site():
                     
     except Exception as e:
         print(f"Crawling error: {{e}}")
-        # Final fallback
+        # Final fallback with minimal config
         try:
-            async with AsyncWebCrawler() as crawler:
-                simple_result = await crawler.arun(url=url)
+            minimal_browser = BrowserConfig(headless=True)
+            minimal_config = CrawlerRunConfig(page_timeout=15000)
+            async with AsyncWebCrawler(config=minimal_browser) as crawler:
+                simple_result = await crawler.arun(url=url, config=minimal_config)
                 if simple_result.success:
-                    print("=== SIMPLE FALLBACK CONTENT ===")
+                    print("=== MINIMAL FALLBACK CONTENT ===")
                     print(simple_result.markdown[:3000] if simple_result.markdown else "No markdown content")
-        except:
-            print("All crawling methods failed")
+                else:
+                    print(f"All crawling methods failed: {{simple_result.error_message}}")
+        except Exception as fallback_error:
+            print(f"Complete crawling failure: {{fallback_error}}")
 
 # Run the async crawl with proper event loop handling
 try:
