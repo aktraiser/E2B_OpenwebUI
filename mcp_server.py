@@ -95,8 +95,8 @@ async def crawl_site():
         # Scroll to load lazy content
         "window.scrollTo(0, document.body.scrollHeight/2);",
         "await new Promise(resolve => setTimeout(resolve, 1000));",
-        # Click load more buttons if they exist
-        "const loadMore = document.querySelector('button:contains(\"Load More\"), button:contains(\"Show More\"), .load-more, .show-more'); if(loadMore && loadMore.offsetParent !== null) loadMore.click();",
+        # Click load more buttons if they exist (fix :contains syntax)
+        "const loadMore = document.querySelector('.load-more, .show-more') || Array.from(document.querySelectorAll('button')).find(btn => btn.textContent.includes('Load More') || btn.textContent.includes('Show More')); if(loadMore && loadMore.offsetParent !== null) loadMore.click();",
         "await new Promise(resolve => setTimeout(resolve, 2000));"
     ]
     
